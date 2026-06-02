@@ -1,9 +1,11 @@
 import type { TranslationKey } from '../i18n'
+import type { IconName } from './icons'
 
 export interface NavigationItem {
   labelKey: TranslationKey
   to: string
   roles?: Role[]
+  icon?: IconName
 }
 
 export type Role = 'ADMIN' | 'MANAGER' | 'CASHIER'
@@ -310,4 +312,36 @@ export interface PurchaseOrder {
   cancelled_at: string | null
   created_at: string
   items: PurchaseOrderItem[]
+}
+
+export interface AppSettings {
+  shop_name: string
+  shop_phone: string
+  shop_address: string
+  default_location_id: number
+  receipt_footer: string
+  line_enabled: boolean
+  line_token_masked: string
+  line_configured: boolean
+  line_target_id: string
+}
+
+export interface LineSettings {
+  line_enabled: boolean
+  line_token?: string
+  line_token_masked: string
+  line_configured: boolean
+  line_target_id: string
+}
+
+export interface NotificationLog {
+  id: number
+  channel: string
+  recipient: string
+  event_type: string
+  payload: string
+  status: 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED'
+  error_message: string
+  sent_at: string | null
+  created_at: string
 }

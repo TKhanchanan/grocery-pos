@@ -396,3 +396,68 @@
 - [x] Frontend build verified.
 
 Note: CSV import is implemented. XLSX uploads are rejected with a clear `400` message for this version.
+
+## Prompt 13: Suppliers and Purchase Orders
+
+- [x] Add supplier APIs.
+- [x] Add purchase order APIs.
+- [x] Support PO statuses `DRAFT`, `SENT`, `RECEIVED`, and `CANCELLED`.
+- [x] Allow manual PO creation.
+- [x] Allow PO creation from reorder alerts.
+- [x] Receive PO in a transaction.
+- [x] Increase stock at the target location on receive.
+- [x] Create `PO_RECEIVE` stock movements.
+- [x] Keep cancelled PO from affecting stock.
+- [x] Add supplier list/form.
+- [x] Add PO list, form, detail, send, receive, and cancel actions.
+- [x] Add responsive PO UI.
+- [x] Backend build verified.
+- [x] Frontend build verified.
+
+## Prompt 14: LINE Notifications and Settings
+
+- [x] Add `GET /api/v1/settings`.
+- [x] Add `PATCH /api/v1/settings`.
+- [x] Add `GET /api/v1/settings/line`.
+- [x] Add `PATCH /api/v1/settings/line`.
+- [x] Add `POST /api/v1/settings/line/test`.
+- [x] Add `GET /api/v1/notification-logs`.
+- [x] Add shop profile, receipt, and LINE settings.
+- [x] Mask LINE token in the UI.
+- [x] Keep LINE failures from breaking sale/restock/PO/transfer transactions.
+- [x] Store notification log success/fail/skipped states.
+- [x] Restrict Settings to Admin.
+- [x] Backend build verified.
+- [x] Frontend build verified.
+
+## Prompt 15: Premium UI Foundation
+
+- [x] Add Thai/English language switching.
+- [x] Add light/dark theme switching.
+- [x] Add text-size preference.
+- [x] Add premium design tokens.
+- [x] Add app icon system.
+- [x] Add collapsible desktop sidebar.
+- [x] Add global toast host.
+- [x] Upgrade buttons, inputs, selects, textareas, cards, badges, modals, drawers, tables, loading, empty, and error states.
+- [x] Add missing reusable components.
+- [x] Polish Login, Dashboard, POS, Products, and Settings without changing business logic.
+- [x] Frontend build verified.
+
+## Prompt 16: Final Responsive Polish, QA, Demo Data, Deploy Prep
+
+- [x] Review Login, Dashboard, POS, Products, Categories, Restock, Stock Movements, Locations, Transfers, Sales History, Receipt, Alerts, Reports, Exports, Imports, Purchase Orders, Suppliers, Users, and Settings.
+- [x] Verify mobile overflow risk and table/card responsiveness by code audit.
+- [x] Compact topbar controls for small screens.
+- [x] Keep POS mobile sticky cart summary.
+- [x] Confirm forms use single-column mobile layouts.
+- [x] Confirm tables use horizontal scroll or mobile cards.
+- [x] Confirm status badges, important numbers, loading, empty, error, toast, and submit loading states.
+- [x] Update README.
+- [x] Update demo script with full QA demo flow.
+- [x] Update `.env.example`.
+- [x] Run backend tests.
+- [x] Run backend build.
+- [x] Run frontend build.
+
+Note: Browser automation was not available in this session, so responsive QA was completed by code review plus production build verification.

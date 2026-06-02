@@ -7,6 +7,7 @@ import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
+import AppLoadingState from '../components/AppLoadingState.vue'
 import AppModal from '../components/AppModal.vue'
 import AppSelect from '../components/AppSelect.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -114,8 +115,8 @@ const CartPanel = defineComponent({
           </div>
         </div>
         <p v-if="insufficientPayment" class="text-sm font-semibold text-red-600">Payment is insufficient.</p>
-        <AppButton class="w-full" :disabled="submitDisabled" @click="$emit('submitSale')">
-          {{ cart.isSubmitting ? 'Submitting...' : 'Confirm sale' }}
+        <AppButton class="w-full" :disabled="submitDisabled" :loading="cart.isSubmitting" @click="$emit('submitSale')">
+          Confirm sale
         </AppButton>
       </div>
     </AppCard>
@@ -271,11 +272,11 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="pb-24 lg:pb-0">
-    <PageHeader title="POS" eyebrow="Sale transaction" description="Search products, scan barcodes, collect payment, and deduct stock from the selected location." />
+    <PageHeader title="POS" eyebrow="Sale transaction" description="Search products, scan barcodes, collect payment, and deduct stock from the selected location." icon="shopping-cart" />
 
     <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
       <div class="grid gap-4">
-        <AppCard>
+        <AppCard hover>
           <div class="grid gap-3 lg:grid-cols-[240px_1fr]">
             <AppSelect v-model="selectedLocationID" label="Location">
               <option v-for="location in locations" :key="location.id" :value="String(location.id)" :disabled="!location.is_active">
@@ -287,19 +288,19 @@ onBeforeUnmount(() => {
           <div class="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
             <AppInput v-model="barcodeInput" label="Barcode manual input" placeholder="Scan or type barcode/SKU" @keyup.enter="addBarcode" />
             <div class="flex items-end gap-2">
-              <AppButton class="flex-1 md:flex-none" variant="secondary" @click="addBarcode">Add barcode</AppButton>
-              <AppButton class="flex-1 md:flex-none" variant="secondary" @click="openScanner">Camera scan</AppButton>
+              <AppButton class="flex-1 md:flex-none" variant="secondary" icon="scan-barcode" @click="addBarcode">Add barcode</AppButton>
+              <AppButton class="flex-1 md:flex-none" variant="secondary" icon="qr-code" @click="openScanner">Camera scan</AppButton>
             </div>
           </div>
           <p class="mt-3 text-sm text-slate-500">Selected location: <b>{{ selectedLocation?.name ?? '-' }}</b></p>
         </AppCard>
 
-        <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
-        <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading products...</div>
+        <div v-if="error" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{{ error }}</div>
+        <AppLoadingState v-if="loading" label="Loading products..." />
         <AppEmptyState v-else-if="products.length === 0" title="No products found" description="Try another name, SKU, barcode, or location." />
 
         <div v-else class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <article v-for="product in products" :key="product.id" class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <article v-for="product in products" :key="product.id" class="premium-card-hover rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <h2 class="truncate font-bold">{{ product.name }}</h2>
@@ -319,7 +320,7 @@ onBeforeUnmount(() => {
                 <p class="text-lg font-bold">{{ product.stock }} {{ product.unit }}</p>
               </div>
             </div>
-            <AppButton class="mt-4 w-full" :disabled="product.stock <= 0" @click="addProduct(product)">
+            <AppButton class="mt-4 w-full" :disabled="product.stock <= 0" icon="plus" @click="addProduct(product)">
               {{ product.stock <= 0 ? 'Out of stock' : 'Add to cart' }}
             </AppButton>
           </article>
@@ -337,14 +338,14 @@ onBeforeUnmount(() => {
       <CartPanel :submit-disabled="!canSubmit" @submit-sale="submitSale" />
     </div>
 
-    <div class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white p-3 shadow-lg xl:hidden">
+    <div class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/90 p-3 shadow-lg backdrop-blur-xl xl:hidden">
       <div class="mx-auto flex max-w-3xl items-center justify-between gap-3">
         <div>
           <p class="text-xs text-slate-500">Cart</p>
           <p class="font-bold">{{ cart.totalItems }} items · {{ money(cart.totalAmount) }} บาท</p>
         </div>
-        <AppButton :disabled="!canSubmit" @click="submitSale">
-          {{ cart.isSubmitting ? 'Submitting...' : 'Confirm' }}
+        <AppButton :disabled="!canSubmit" :loading="cart.isSubmitting" @click="submitSale">
+          Confirm
         </AppButton>
       </div>
     </div>
@@ -374,7 +375,7 @@ onBeforeUnmount(() => {
         </dl>
         <div class="flex justify-end gap-2">
           <AppButton variant="secondary" @click="successReceipt = null">Close</AppButton>
-          <RouterLink :to="receiptPath" class="inline-flex min-h-10 items-center justify-center rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
+          <RouterLink :to="receiptPath" class="focus-ring inline-flex min-h-11 items-center justify-center rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm shadow-brand-600/20">
             View receipt
           </RouterLink>
         </div>

@@ -92,6 +92,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/purchase-orders/{id}/send", s.requireRoles(s.sendPurchaseOrder, RoleAdmin, RoleManager))
 	mux.HandleFunc("POST /api/v1/purchase-orders/{id}/receive", s.requireRoles(s.receivePurchaseOrder, RoleAdmin, RoleManager))
 	mux.HandleFunc("POST /api/v1/purchase-orders/{id}/cancel", s.requireRoles(s.cancelPurchaseOrder, RoleAdmin, RoleManager))
+	mux.HandleFunc("GET /api/v1/settings", s.requireRoles(s.settings, RoleAdmin))
+	mux.HandleFunc("PATCH /api/v1/settings", s.requireRoles(s.settings, RoleAdmin))
+	mux.HandleFunc("GET /api/v1/settings/line", s.requireRoles(s.lineSettings, RoleAdmin))
+	mux.HandleFunc("PATCH /api/v1/settings/line", s.requireRoles(s.lineSettings, RoleAdmin))
+	mux.HandleFunc("POST /api/v1/settings/line/test", s.requireRoles(s.testLineNotification, RoleAdmin))
+	mux.HandleFunc("GET /api/v1/notification-logs", s.requireRoles(s.notificationLogs, RoleAdmin))
 	mux.HandleFunc("/", s.notFound)
 
 	return middleware.Chain(

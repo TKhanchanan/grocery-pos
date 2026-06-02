@@ -172,6 +172,11 @@ func (s *Server) createStockTransfer(ctx context.Context, user User, body StockT
 }
 
 func (s *Server) completeTransfer(ctx context.Context, user User, transferID uint64) (StockTransfer, error) {
+	type affectedStock struct {
+		productID  uint64
+		locationID uint64
+	}
+	affected := []affectedStock{}
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
 		var status string
 		var fromLocationID, toLocationID uint64
@@ -239,6 +244,10 @@ func (s *Server) completeTransfer(ctx context.Context, user User, transferID uin
 			if err := recalculateAlerts(ctx, tx, item.productID, toLocationID); err != nil {
 				return err
 			}
+			affected = append(affected,
+				affectedStock{productID: item.productID, locationID: fromLocationID},
+				affectedStock{productID: item.productID, locationID: toLocationID},
+			)
 		}
 		_, err = tx.ExecContext(ctx, `UPDATE stock_transfers SET status='COMPLETED', completed_at=NOW() WHERE id=?`, transferID)
 		return err
@@ -246,7 +255,20 @@ func (s *Server) completeTransfer(ctx context.Context, user User, transferID uin
 	if err != nil {
 		return StockTransfer{}, err
 	}
-	return s.stockTransferByID(ctx, transferID)
+	transfer, err := s.stockTransferByID(ctx, transferID)
+	if err != nil {
+		return StockTransfer{}, err
+	}
+	s.notifyEvent(ctx, "TRANSFER_COMPLETED", "Transfer completed "+transfer.TransferNo+" from "+transfer.FromLocationName+" to "+transfer.ToLocationName, map[string]any{
+		"transfer_id":      transfer.ID,
+		"transfer_no":      transfer.TransferNo,
+		"from_location_id": transfer.FromLocationID,
+		"to_location_id":   transfer.ToLocationID,
+	})
+	for _, item := range affected {
+		s.notifyActiveStockAlerts(ctx, item.productID, item.locationID)
+	}
+	return transfer, nil
 }
 
 func (s *Server) cancelTransfer(ctx context.Context, transferID uint64) (StockTransfer, error) {

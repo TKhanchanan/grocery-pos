@@ -6,6 +6,7 @@ import AppBadge from '../components/AppBadge.vue'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
+import AppLoadingState from '../components/AppLoadingState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatCard from '../components/StatCard.vue'
 import type { DashboardSummary, StockStatus } from '../types/navigation'
@@ -46,19 +47,19 @@ onMounted(loadDashboard)
 
 <template>
   <section>
-    <PageHeader title="Dashboard" eyebrow="Overview" description="Daily sales, monthly profit, alerts, and stock signals from live POS data.">
-      <AppButton variant="secondary" @click="loadDashboard">Refresh</AppButton>
+    <PageHeader title="Dashboard" eyebrow="Overview" description="Daily sales, monthly profit, alerts, and stock signals from live POS data." icon="layout-dashboard">
+      <AppButton variant="secondary" icon="history" @click="loadDashboard">Refresh</AppButton>
     </PageHeader>
 
-    <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
-    <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading dashboard...</div>
+    <div v-if="error" class="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{{ error }}</div>
+    <AppLoadingState v-if="loading" class="mb-4" label="Loading dashboard..." />
 
     <template v-if="summary">
       <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Today sales" :value="`${money(summary.today_sales)} บาท`" :helper="`${summary.today_receipts} receipts today`" />
-        <StatCard label="This month profit" :value="`${money(summary.gross_profit_this_month)} บาท`" helper="Completed sales only" />
-        <StatCard label="Top product" :value="summary.top_product_this_month?.product_name ?? '-'" :helper="summary.top_product_this_month ? `${summary.top_product_this_month.quantity} sold this month` : 'No sales yet'" />
-        <StatCard label="Open alerts" :value="alertTotal" :helper="`${summary.out_of_stock_count} out · ${summary.reorder_count} reorder`" />
+        <StatCard label="Today sales" :value="`${money(summary.today_sales)} บาท`" :helper="`${summary.today_receipts} receipts today`" icon="banknote" tone="success" />
+        <StatCard label="This month profit" :value="`${money(summary.gross_profit_this_month)} บาท`" helper="Completed sales only" icon="chart-column" />
+        <StatCard label="Top product" :value="summary.top_product_this_month?.product_name ?? '-'" :helper="summary.top_product_this_month ? `${summary.top_product_this_month.quantity} sold this month` : 'No sales yet'" icon="package" tone="info" />
+        <StatCard label="Open alerts" :value="alertTotal" :helper="`${summary.out_of_stock_count} out · ${summary.reorder_count} reorder`" icon="bell" tone="warning" />
       </div>
 
       <div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -79,7 +80,7 @@ onMounted(loadDashboard)
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                <tr v-for="sale in summary.recent_sales" :key="sale.id">
+                <tr v-for="sale in summary.recent_sales" :key="sale.id" class="hover:bg-slate-50/80">
                   <td class="px-3 py-2 font-semibold">{{ sale.receipt_no }}</td>
                   <td class="px-3 py-2">{{ sale.cashier_name }}</td>
                   <td class="px-3 py-2">{{ sale.payment_method }}</td>
@@ -94,7 +95,7 @@ onMounted(loadDashboard)
           <h2 class="font-bold">Payment today</h2>
           <AppEmptyState v-if="summary.payment_method_summary.length === 0" class="mt-4" title="No payments" description="Payment mix appears after today sales." />
           <div v-else class="mt-4 grid gap-3">
-            <div v-for="payment in summary.payment_method_summary" :key="payment.payment_method" class="rounded-lg border border-slate-200 p-3">
+            <div v-for="payment in summary.payment_method_summary" :key="payment.payment_method" class="rounded-2xl border border-slate-200 bg-white/65 p-4">
               <div class="flex items-center justify-between">
                 <span class="font-bold">{{ payment.payment_method }}</span>
                 <AppBadge>{{ payment.receipt_count }} receipts</AppBadge>
@@ -113,7 +114,7 @@ onMounted(loadDashboard)
           </div>
           <AppEmptyState v-if="summary.low_stock_items.length === 0" class="mt-4" title="No low stock" description="Products below threshold will appear here." />
           <div v-else class="mt-4 grid gap-3 sm:grid-cols-2">
-            <article v-for="item in summary.low_stock_items" :key="`${item.product_id}-${item.location_id}`" class="rounded-lg border border-slate-200 p-3">
+            <article v-for="item in summary.low_stock_items" :key="`${item.product_id}-${item.location_id}`" class="rounded-2xl border border-slate-200 bg-white/65 p-4">
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
                   <h3 class="truncate font-bold">{{ item.product_name }}</h3>
@@ -131,7 +132,7 @@ onMounted(loadDashboard)
           <h2 class="font-bold">Top products this month</h2>
           <AppEmptyState v-if="summary.top_products.length === 0" class="mt-4" title="No product sales" description="Best sellers appear after completed sales." />
           <div v-else class="mt-4 grid gap-3">
-            <div v-for="product in summary.top_products" :key="product.product_id" class="rounded-lg border border-slate-200 p-3">
+            <div v-for="product in summary.top_products" :key="product.product_id" class="rounded-2xl border border-slate-200 bg-white/65 p-4">
               <div class="flex items-center justify-between gap-3">
                 <div>
                   <h3 class="font-bold">{{ product.product_name }}</h3>

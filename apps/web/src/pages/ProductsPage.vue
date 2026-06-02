@@ -3,10 +3,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { apiClient, patchJSON, postJSON } from '../api/client'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
+import AppCheckbox from '../components/AppCheckbox.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
+import AppLoadingState from '../components/AppLoadingState.vue'
 import AppSelect from '../components/AppSelect.vue'
 import PageHeader from '../components/PageHeader.vue'
+import StatCard from '../components/StatCard.vue'
 import { useAuthStore } from '../stores/auth'
 import type { Category, Product, ProductStock, StockStatus } from '../types/navigation'
 
@@ -48,6 +51,9 @@ const form = reactive<ProductForm>({
 })
 
 const canManage = computed(() => auth.can(['ADMIN', 'MANAGER']))
+const activeCount = computed(() => products.value.filter((product) => product.is_active).length)
+const lowSignalCount = computed(() => products.value.filter((product) => product.stock_status !== 'in_stock').length)
+const totalStock = computed(() => products.value.reduce((sum, product) => sum + product.total_stock, 0))
 
 function stockLabel(status: StockStatus) {
   return {
@@ -167,14 +173,23 @@ onMounted(load)
 
 <template>
   <section>
-    <PageHeader title="Products" eyebrow="Catalog" description="Search by product name, SKU, or barcode. Product stock is read from product_stocks by location.">
-      <AppButton variant="secondary" @click="load">Refresh</AppButton>
+    <PageHeader title="Products" eyebrow="Catalog" description="Search by product name, SKU, or barcode. Product stock is read from product_stocks by location." icon="package">
+      <AppButton variant="secondary" icon="history" @click="load">Refresh</AppButton>
     </PageHeader>
 
+    <div class="mb-4 grid gap-3 sm:grid-cols-3">
+      <StatCard label="Products" :value="products.length" :helper="`${activeCount} active`" icon="package" />
+      <StatCard label="Total stock" :value="totalStock" helper="Across visible products" icon="map-pin" tone="success" />
+      <StatCard label="Needs attention" :value="lowSignalCount" helper="Low, out, or reorder" icon="bell" tone="warning" />
+    </div>
+
     <div class="grid gap-4 xl:grid-cols-[380px_1fr]">
-      <AppCard v-if="canManage">
+      <AppCard v-if="canManage" hover>
         <form class="grid gap-3" @submit.prevent="save">
-          <h2 class="font-bold">{{ form.id ? 'Edit product' : 'Create product' }}</h2>
+          <div>
+            <h2 class="font-bold">{{ form.id ? 'Edit product' : 'Create product' }}</h2>
+            <p class="mt-1 text-sm text-slate-500">SKU stays unique; product names can be reused.</p>
+          </div>
           <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
             <AppInput v-model="form.sku" label="SKU" />
             <AppInput v-model="form.name" label="Name" />
@@ -189,14 +204,11 @@ onMounted(load)
             <AppInput v-model="form.threshold" label="Threshold" type="number" />
             <AppInput v-model="form.reorder_point" label="Reorder point" type="number" />
           </div>
-          <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <input v-model="form.is_active" type="checkbox" />
-            Active
-          </label>
+          <AppCheckbox v-model="form.is_active" label="Active" description="Inactive products stay in history but cannot be sold." />
           <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
           <div class="flex gap-2">
-            <AppButton type="submit" :disabled="saving">{{ saving ? 'Saving...' : form.id ? 'Save' : 'Create' }}</AppButton>
-            <AppButton v-if="form.id" variant="secondary" @click="resetForm">Cancel</AppButton>
+            <AppButton type="submit" :loading="saving" :disabled="saving" icon="check-circle">{{ form.id ? 'Save' : 'Create' }}</AppButton>
+            <AppButton v-if="form.id" variant="secondary" icon="x" @click="resetForm">Cancel</AppButton>
           </div>
         </form>
       </AppCard>
@@ -221,12 +233,12 @@ onMounted(load)
               <option value="out_of_stock">Out of stock</option>
               <option value="reorder_point">Reorder point</option>
             </AppSelect>
-            <div class="flex items-end"><AppButton class="w-full" @click="load">Apply</AppButton></div>
+            <div class="flex items-end"><AppButton class="w-full" icon="search" @click="load">Apply</AppButton></div>
           </div>
         </AppCard>
 
         <AppCard>
-          <div v-if="loading" class="text-sm text-slate-500">Loading products...</div>
+          <AppLoadingState v-if="loading" label="Loading products..." />
           <AppEmptyState v-else-if="products.length === 0" title="No products" description="Try adjusting filters or create a new product." />
 
           <div v-else>
@@ -244,7 +256,7 @@ onMounted(load)
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                  <tr v-for="product in products" :key="product.id">
+                  <tr v-for="product in products" :key="product.id" class="hover:bg-slate-50/80">
                     <td class="px-3 py-2">
                       <p class="font-semibold">{{ product.name }}</p>
                       <p class="text-xs text-slate-500">{{ product.unit }}</p>
@@ -259,8 +271,8 @@ onMounted(load)
                     </td>
                     <td class="px-3 py-2">
                       <div class="flex flex-wrap gap-2">
-                        <AppButton variant="secondary" @click="showStocks(product)">Stocks</AppButton>
-                        <AppButton v-if="canManage" variant="secondary" @click="edit(product)">Edit</AppButton>
+                        <AppButton variant="secondary" icon="map-pin" @click="showStocks(product)">Stocks</AppButton>
+                        <AppButton v-if="canManage" variant="secondary" icon="settings" @click="edit(product)">Edit</AppButton>
                         <AppButton v-if="canManage" :variant="product.is_active ? 'danger' : 'secondary'" @click="setActive(product, !product.is_active)">
                           {{ product.is_active ? 'Deactivate' : 'Activate' }}
                         </AppButton>
@@ -272,7 +284,7 @@ onMounted(load)
             </div>
 
             <div class="grid gap-3 md:hidden">
-              <article v-for="product in products" :key="product.id" class="rounded-lg border border-slate-200 p-3">
+              <article v-for="product in products" :key="product.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 shadow-sm">
                 <div class="flex items-start justify-between gap-3">
                   <div>
                     <h3 class="font-bold">{{ product.name }}</h3>
@@ -287,8 +299,8 @@ onMounted(load)
                   <div><dt class="text-slate-500">Status</dt><dd class="font-semibold">{{ product.is_active ? 'Active' : 'Inactive' }}</dd></div>
                 </dl>
                 <div class="mt-3 flex flex-wrap gap-2">
-                  <AppButton variant="secondary" @click="showStocks(product)">Stocks</AppButton>
-                  <AppButton v-if="canManage" variant="secondary" @click="edit(product)">Edit</AppButton>
+                  <AppButton variant="secondary" icon="map-pin" @click="showStocks(product)">Stocks</AppButton>
+                  <AppButton v-if="canManage" variant="secondary" icon="settings" @click="edit(product)">Edit</AppButton>
                 </div>
               </article>
             </div>
@@ -299,7 +311,7 @@ onMounted(load)
           <h2 class="font-bold">Product stock by location</h2>
           <p class="mt-1 text-sm text-slate-500">{{ selectedProduct ? selectedProduct.name : 'Select a product to view location stock.' }}</p>
           <div v-if="selectedStocks.length" class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <article v-for="stock in selectedStocks" :key="stock.location_id" class="rounded-lg border border-slate-200 p-3">
+            <article v-for="stock in selectedStocks" :key="stock.location_id" class="rounded-2xl border border-slate-200 bg-white/65 p-4">
               <p class="font-semibold">{{ stock.location_name }}</p>
               <p class="mt-2 text-2xl font-bold text-brand-700">{{ stock.quantity }}</p>
               <span class="mt-2 inline-flex rounded-full px-2 py-1 text-xs font-bold" :class="stockClass(stock.stock_status)">{{ stockLabel(stock.stock_status) }}</span>

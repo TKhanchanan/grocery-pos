@@ -7,4 +7,9 @@ import './assets/main.css'
 
 applyDocumentPreferences(readStoredLanguage(), readStoredTheme())
 
+const storedTextSize = localStorage.getItem('app_text_size')
+if (storedTextSize === 'sm' || storedTextSize === 'base' || storedTextSize === 'lg' || storedTextSize === 'xl') {
+  document.documentElement.dataset.textSize = storedTextSize
+}
+
 createApp(App).use(createPinia()).use(router).mount('#app')

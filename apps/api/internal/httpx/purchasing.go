@@ -327,7 +327,18 @@ func (s *Server) createPurchaseOrder(ctx context.Context, user User, body Purcha
 	if err != nil {
 		return PurchaseOrder{}, err
 	}
-	return s.purchaseOrderByID(ctx, poID)
+	po, err := s.purchaseOrderByID(ctx, poID)
+	if err != nil {
+		return PurchaseOrder{}, err
+	}
+	s.notifyEvent(ctx, "PURCHASE_ORDER_CREATED", "Purchase order created "+po.PONumber+" for "+po.SupplierName, map[string]any{
+		"purchase_order_id": po.ID,
+		"po_number":         po.PONumber,
+		"supplier_id":       po.SupplierID,
+		"location_id":       po.LocationID,
+		"total_cost":        po.TotalCost,
+	})
+	return po, nil
 }
 
 func (s *Server) updatePurchaseOrder(ctx context.Context, poID uint64, body PurchaseOrderInput) (PurchaseOrder, error) {
@@ -409,12 +420,15 @@ func (s *Server) transitionPO(ctx context.Context, user User, poID uint64, targe
 }
 
 func (s *Server) receivePO(ctx context.Context, user User, poID uint64) (PurchaseOrder, error) {
+	affectedProducts := []uint64{}
+	var receivedLocationID uint64
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
 		var status string
 		var locationID uint64
 		if err := tx.QueryRowContext(ctx, `SELECT status, location_id FROM purchase_orders WHERE id=? FOR UPDATE`, poID).Scan(&status, &locationID); err != nil {
 			return err
 		}
+		receivedLocationID = locationID
 		if status != "SENT" && status != "DRAFT" {
 			return errors.New("only draft or sent purchase orders can be received")
 		}
@@ -465,6 +479,7 @@ func (s *Server) receivePO(ctx context.Context, user User, poID uint64) (Purchas
 			if err := recalculateAlerts(ctx, tx, item.productID, locationID); err != nil {
 				return err
 			}
+			affectedProducts = append(affectedProducts, item.productID)
 		}
 		_, err = tx.ExecContext(ctx, `UPDATE purchase_orders SET status='RECEIVED', received_by=?, received_at=NOW() WHERE id=?`, user.ID, poID)
 		return err
@@ -472,7 +487,21 @@ func (s *Server) receivePO(ctx context.Context, user User, poID uint64) (Purchas
 	if err != nil {
 		return PurchaseOrder{}, err
 	}
-	return s.purchaseOrderByID(ctx, poID)
+	po, err := s.purchaseOrderByID(ctx, poID)
+	if err != nil {
+		return PurchaseOrder{}, err
+	}
+	s.notifyEvent(ctx, "PURCHASE_ORDER_RECEIVED", "Purchase order received "+po.PONumber+" at "+po.LocationName, map[string]any{
+		"purchase_order_id": po.ID,
+		"po_number":         po.PONumber,
+		"supplier_id":       po.SupplierID,
+		"location_id":       po.LocationID,
+		"total_cost":        po.TotalCost,
+	})
+	for _, productID := range affectedProducts {
+		s.notifyActiveStockAlerts(ctx, productID, receivedLocationID)
+	}
+	return po, nil
 }
 
 func (s *Server) listPurchaseOrders(ctx context.Context) ([]PurchaseOrder, error) {

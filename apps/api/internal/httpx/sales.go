@@ -3,7 +3,6 @@ package httpx
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -285,6 +284,9 @@ func (s *Server) createSale(ctx context.Context, user User, body SaleInput) (Rec
 	}
 
 	var saleID uint64
+	var receiptNo string
+	var totalAmount float64
+	affectedProducts := []uint64{}
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
 		var locationActive bool
 		if err := tx.QueryRowContext(ctx, `SELECT active FROM locations WHERE id=? FOR UPDATE`, body.LocationID).Scan(&locationActive); err != nil {
@@ -326,14 +328,14 @@ func (s *Server) createSale(ctx context.Context, user User, body SaleInput) (Rec
 			lines = append(lines, line)
 		}
 
-		totalAmount := subtotal
+		totalAmount = subtotal
 		if body.ReceivedAmount+0.0001 < totalAmount {
 			return errors.New("received amount is insufficient")
 		}
 		profit := money(totalAmount - totalCost)
 		changeAmount := money(body.ReceivedAmount - totalAmount)
 		now := time.Now()
-		receiptNo := fmt.Sprintf("RC%s%06d", now.Format("20060102150405"), now.Nanosecond()/1000)
+		receiptNo = fmt.Sprintf("RC%s%06d", now.Format("20060102150405"), now.Nanosecond()/1000)
 		result, err := tx.ExecContext(ctx, `
 			INSERT INTO sales(receipt_no, location_id, cashier_id, subtotal, total_amount, total_cost, profit, payment_method, paid_amount, change_amount, status)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPLETED')`,
@@ -361,23 +363,27 @@ func (s *Server) createSale(ctx context.Context, user User, body SaleInput) (Rec
 			if err := recalculateAlerts(ctx, tx, line.ProductID, body.LocationID); err != nil {
 				return err
 			}
+			affectedProducts = append(affectedProducts, line.ProductID)
 		}
-
-		payload, _ := json.Marshal(map[string]any{
-			"sale_id":     saleID,
-			"receipt_no":  receiptNo,
-			"location_id": body.LocationID,
-			"total":       totalAmount,
-		})
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO notification_logs(channel, event_type, payload, status)
-			VALUES ('SYSTEM', 'SALE_COMPLETED', ?, 'SENT')`, string(payload))
-		return err
+		return nil
 	})
 	if err != nil {
 		return Receipt{}, err
 	}
-	return s.receiptByID(ctx, saleID)
+	receipt, err := s.receiptByID(ctx, saleID)
+	if err != nil {
+		return Receipt{}, err
+	}
+	s.notifyEvent(ctx, "SALE_COMPLETED", fmt.Sprintf("Sale completed %s total %.2f", receiptNo, totalAmount), map[string]any{
+		"sale_id":     saleID,
+		"receipt_no":  receiptNo,
+		"location_id": body.LocationID,
+		"total":       totalAmount,
+	})
+	for _, productID := range affectedProducts {
+		s.notifyActiveStockAlerts(ctx, productID, body.LocationID)
+	}
+	return receipt, nil
 }
 
 func (s *Server) cancelCompletedSale(ctx context.Context, user User, saleID uint64, body CancelSaleInput) (Receipt, error) {

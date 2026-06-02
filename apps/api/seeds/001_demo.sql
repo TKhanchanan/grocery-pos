@@ -68,9 +68,15 @@ WHERE NOT EXISTS (SELECT 1 FROM suppliers WHERE name='Sample Grocery Supplier');
 
 INSERT INTO settings(setting_key, setting_value) VALUES
 ('shop_name', 'Grocery POS Demo'),
+('shop_phone', ''),
+('shop_address', ''),
+('default_location_id', ''),
 ('currency', 'THB'),
 ('locale', 'th-TH'),
 ('line_notifications_enabled', 'false'),
+('line_enabled', 'false'),
+('line_token', ''),
+('line_target_id', ''),
 ('receipt_footer', 'ขอบคุณที่อุดหนุน')
 ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value);
 

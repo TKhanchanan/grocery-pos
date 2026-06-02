@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"grocery-pos/apps/api/internal/response"
@@ -146,7 +147,19 @@ func (s *Server) restock(ctx context.Context, user User, productID uint64, body 
 	if err != nil {
 		return StockMovement{}, err
 	}
-	return s.stockMovementByID(ctx, movementID)
+	movement, err := s.stockMovementByID(ctx, movementID)
+	if err != nil {
+		return StockMovement{}, err
+	}
+	s.notifyEvent(ctx, "RESTOCK_CREATED", "Restock created for "+movement.ProductName+" at "+movement.LocationName+": +"+strconv.Itoa(body.Quantity), map[string]any{
+		"movement_id": movement.ID,
+		"product_id":  productID,
+		"location_id": body.LocationID,
+		"quantity":    body.Quantity,
+		"unit_cost":   unitCost,
+	})
+	s.notifyActiveStockAlerts(ctx, productID, body.LocationID)
+	return movement, nil
 }
 
 func (s *Server) adjustStock(ctx context.Context, user User, productID uint64, body AdjustmentInput) (StockMovement, error) {
@@ -180,7 +193,12 @@ func (s *Server) adjustStock(ctx context.Context, user User, productID uint64, b
 	if err != nil {
 		return StockMovement{}, err
 	}
-	return s.stockMovementByID(ctx, movementID)
+	movement, err := s.stockMovementByID(ctx, movementID)
+	if err != nil {
+		return StockMovement{}, err
+	}
+	s.notifyActiveStockAlerts(ctx, productID, body.LocationID)
+	return movement, nil
 }
 
 func (s *Server) withTx(ctx context.Context, fn func(*sql.Tx) error) error {
