@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ label?: string; placeholder?: string; modelValue?: string | number; type?: string }>()
+defineProps<{ label?: string; placeholder?: string; modelValue?: string | number; type?: string; disabled?: boolean }>()
 defineEmits<{ 'update:modelValue': [value: string] }>()
 </script>
 
@@ -11,6 +11,7 @@ defineEmits<{ 'update:modelValue': [value: string] }>()
       :type="type ?? 'text'"
       :placeholder="placeholder"
       :value="modelValue"
+      :disabled="disabled"
       @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
     />
   </label>

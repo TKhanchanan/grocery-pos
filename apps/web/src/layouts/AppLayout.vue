@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
@@ -20,8 +20,8 @@ const navItems: NavigationItem[] = [
   { label: 'Stock Movements', to: '/stock-movements', roles: ['ADMIN', 'MANAGER'] },
   { label: 'Locations', to: '/locations', roles: ['ADMIN', 'MANAGER'] },
   { label: 'Transfers', to: '/transfers', roles: ['ADMIN', 'MANAGER'] },
-  { label: 'Sales History', to: '/sales-history', roles: ['ADMIN', 'CASHIER'] },
-  { label: 'Receipt Detail', to: '/receipt-detail', roles: ['ADMIN', 'CASHIER'] },
+  { label: 'Sales History', to: '/sales-history', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
+  { label: 'Receipt Detail', to: '/receipt-detail', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
   { label: 'Alerts', to: '/alerts', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
   { label: 'Reports', to: '/reports', roles: ['ADMIN', 'MANAGER'] },
   { label: 'Exports', to: '/exports', roles: ['ADMIN', 'MANAGER'] },
@@ -42,6 +42,14 @@ async function logout() {
   await auth.logout()
   window.location.assign('/login')
 }
+
+onMounted(() => {
+  app.loadAlertCount()
+})
+
+watch(() => route.path, () => {
+  app.loadAlertCount()
+})
 </script>
 
 <template>
@@ -60,7 +68,10 @@ async function logout() {
             class="block rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-50 hover:text-brand-700"
             :class="{ 'bg-brand-600 text-white hover:bg-brand-600 hover:text-white': isActive(item.to) }"
           >
-            {{ item.label }}
+            <span class="flex items-center justify-between gap-2">
+              <span>{{ item.label }}</span>
+              <AppBadge v-if="item.to === '/alerts' && app.alertCount">{{ app.alertCount }}</AppBadge>
+            </span>
           </RouterLink>
         </nav>
       </div>
@@ -76,7 +87,10 @@ async function logout() {
           :class="{ 'bg-brand-600 text-white': isActive(item.to) }"
           @click="app.closeSidebar"
         >
-          {{ item.label }}
+          <span class="flex items-center justify-between gap-2">
+            <span>{{ item.label }}</span>
+            <AppBadge v-if="item.to === '/alerts' && app.alertCount">{{ app.alertCount }}</AppBadge>
+          </span>
         </RouterLink>
       </nav>
     </AppDrawer>
@@ -92,10 +106,10 @@ async function logout() {
             <p class="truncate font-semibold">Foundation workspace</p>
           </div>
           <div class="flex items-center gap-3">
-            <button class="relative rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold">
+            <RouterLink to="/alerts" class="relative rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold">
               Alerts
               <AppBadge v-if="app.alertCount" class="absolute -right-2 -top-2">{{ app.alertCount }}</AppBadge>
-            </button>
+            </RouterLink>
             <button class="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold">
               <span class="grid h-7 w-7 place-items-center rounded-full bg-brand-100 text-xs text-brand-700">{{ auth.userInitials }}</span>
               <span class="hidden sm:inline">{{ auth.user?.username }} · {{ auth.user?.role }}</span>

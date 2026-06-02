@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { apiClient } from '../api/client'
+import type { InventoryAlert } from '../types/navigation'
 
 export const useAppStore = defineStore('app', () => {
   const sidebarOpen = ref(false)
@@ -16,5 +18,10 @@ export const useAppStore = defineStore('app', () => {
     sidebarOpen.value = false
   }
 
-  return { sidebarOpen, alertCount, userName, userInitials, openSidebar, closeSidebar }
+  async function loadAlertCount() {
+    const alerts = await apiClient<InventoryAlert[]>('/v1/alerts?unread=true').catch(() => [])
+    alertCount.value = alerts.length
+  }
+
+  return { sidebarOpen, alertCount, userName, userInitials, openSidebar, closeSidebar, loadAlertCount }
 })

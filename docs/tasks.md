@@ -205,3 +205,194 @@
 - [x] Verify insufficient stock is blocked.
 - [x] Backend build verified.
 - [x] Frontend build verified.
+
+## Prompt 7: POS, Cart, Barcode, Sale Transaction
+
+- [x] Add `GET /api/v1/pos/products`.
+- [x] Add `POST /api/v1/sales`.
+- [x] Add `GET /api/v1/sales/{id}/receipt`.
+- [x] Search POS products by name, SKU, or barcode.
+- [x] Filter POS products by selected location.
+- [x] Return stock at selected location.
+- [x] Validate authenticated cashier/admin role for sale transaction.
+- [x] Validate selected location and cart items.
+- [x] Lock `product_stocks` rows during sale.
+- [x] Reject insufficient stock.
+- [x] Calculate total on backend.
+- [x] Reject insufficient payment.
+- [x] Create sale and sale item snapshots.
+- [x] Deduct stock from selected location.
+- [x] Create `SALE` stock movements with before/after stock.
+- [x] Recalculate alerts after sale.
+- [x] Create `SALE_COMPLETED` notification log.
+- [x] Keep stock from becoming negative.
+- [x] Add POS page with responsive product search/cards and cart/payment panel.
+- [x] Add location selector.
+- [x] Add product search by name/SKU/barcode.
+- [x] Add manual barcode input.
+- [x] Add camera scan modal with manual fallback.
+- [x] Add Pinia cart store with required cart actions and totals.
+- [x] Add CASH and QR payment methods.
+- [x] Add sale success modal and receipt link.
+- [x] Add receipt detail page that loads generated receipt by id.
+- [x] Verify sale of `มาม่า` 3 items totals 18, paid 20, change 2.
+- [x] Verify stock decreases by 3 at selected location.
+- [x] Verify receipt is generated.
+- [x] Verify insufficient payment is blocked.
+- [x] Verify insufficient stock is blocked.
+- [x] Verify confirm button disables during submit.
+- [x] Backend build verified.
+- [x] Frontend build verified.
+
+## Prompt 8: Receipt, Sales History, Cancel Sale
+
+- [x] Add `GET /api/v1/sales`.
+- [x] Add `GET /api/v1/sales/{id}`.
+- [x] Keep `GET /api/v1/sales/{id}/receipt`.
+- [x] Add `POST /api/v1/sales/{id}/cancel`.
+- [x] Add filters for date range, cashier, location, payment method, status, and receipt number.
+- [x] Restrict sale cancel to Admin/Manager.
+- [x] Keep cashier unable to cancel sale.
+- [x] Only allow cancelling `COMPLETED` sales.
+- [x] Keep cancelled sale records instead of deleting them.
+- [x] Store cancel reason.
+- [x] Restore stock to original sale location.
+- [x] Create `CANCEL_SALE` stock movements.
+- [x] Keep cancelled sales visible as `CANCELLED`.
+- [x] Add printable receipt card.
+- [x] Add print button.
+- [x] Add back to POS button.
+- [x] Add sales history page.
+- [x] Add date/cashier/location/payment/status/receipt filters.
+- [x] Add responsive desktop table and mobile cards.
+- [x] Add cancel sale button for Admin/Manager.
+- [x] Add confirm dialog with cancel reason.
+- [x] Add cancelled badge/reason display.
+- [x] Verify receipt shows snapshot data.
+- [x] Verify sales history filters work.
+- [x] Verify cancel restores stock.
+- [x] Verify cancelled sale remains visible.
+- [x] Verify cashier receives 403 when cancelling sale.
+- [x] Backend build verified.
+- [x] Frontend build verified.
+
+## Prompt 9: Alerts and Reorder Point
+
+- [x] Add `GET /api/v1/alerts`.
+- [x] Add `PATCH /api/v1/alerts/{id}/read`.
+- [x] Add `PATCH /api/v1/alerts/read-all`.
+- [x] Support alert types `LOW_STOCK`, `OUT_OF_STOCK`, and `REORDER_POINT`.
+- [x] Create `OUT_OF_STOCK` when stock is 0.
+- [x] Create `LOW_STOCK` when threshold is greater than 0 and stock is less than or equal to threshold.
+- [x] Skip `LOW_STOCK` when threshold is 0.
+- [x] Create `REORDER_POINT` when reorder point is greater than 0 and stock is less than or equal to reorder point.
+- [x] Avoid duplicate unread alerts for the same product/location/type when recalculating.
+- [x] Keep alert links to product, restock, and purchase order screens.
+- [x] Add alert badge to topbar and sidebar.
+- [x] Add Alerts page.
+- [x] Add unread/type/location filters.
+- [x] Add mark as read.
+- [x] Add mark all as read.
+- [x] Add responsive alert cards.
+- [x] Verify `น้ำอัดลม` stock 5 threshold 10 shows `LOW_STOCK`.
+- [x] Verify stock 0 shows `OUT_OF_STOCK`.
+- [x] Verify stock less than or equal to reorder point shows `REORDER_POINT`.
+- [x] Verify alert badge count updates after reading alerts.
+- [x] Backend build verified.
+- [x] Frontend build verified.
+
+## Prompt 10: Dashboard and Reports
+
+- [x] Add `GET /api/v1/dashboard/summary`.
+- [x] Add `GET /api/v1/reports/daily-sales`.
+- [x] Add `GET /api/v1/reports/monthly-sales`.
+- [x] Add `GET /api/v1/reports/best-selling`.
+- [x] Add `GET /api/v1/reports/profit-by-product`.
+- [x] Add `GET /api/v1/reports/stock`.
+- [x] Add `GET /api/v1/reports/inventory-valuation`.
+- [x] Add `GET /api/v1/reports/payment-summary`.
+- [x] Add `GET /api/v1/reports/low-stock`.
+- [x] Add `GET /api/v1/reports/reorder`.
+- [x] Dashboard returns today sales, today receipts, monthly gross profit, top product, stock alert counts, payment summary, recent sales, and stock sections.
+- [x] Reports support date, month, and location filters where applicable.
+- [x] Revenue/profit reports exclude cancelled sales.
+- [x] Profit is calculated as revenue minus cost.
+- [x] Product sales/profit reports use sale item snapshots.
+- [x] Add dashboard stat cards.
+- [x] Add recent sales section.
+- [x] Add low stock section.
+- [x] Add top product section.
+- [x] Add reports page with tabs.
+- [x] Add report filter panel.
+- [x] Add responsive report tables/cards.
+- [x] Add summary cards.
+- [x] Add export placeholder buttons.
+- [x] Verify dashboard API and UI build.
+- [x] Verify best-selling report works.
+- [x] Verify profit per product works.
+- [x] Verify stock report works.
+- [x] Verify report filters work.
+- [x] Backend build verified.
+- [x] Frontend build verified.
+
+## Prompt 11: Export Reports
+
+- [x] Add `GET /api/v1/exports/inventory-monthly?month=YYYY-MM&format=csv`.
+- [x] Add `GET /api/v1/exports/products?format=csv`.
+- [x] Add `GET /api/v1/exports/sales?date_from=&date_to=&format=csv`.
+- [x] Add `GET /api/v1/exports/profit?month=YYYY-MM&format=csv`.
+- [x] Return direct CSV file responses with attachment filenames.
+- [x] Add UTF-8 BOM so Thai text opens correctly in Excel.
+- [x] Respect sales date filters.
+- [x] Respect profit month and optional location filters.
+- [x] Exclude cancelled sales from sales/profit exports.
+- [x] Add Exports page.
+- [x] Add month/date filters.
+- [x] Add download loading state.
+- [x] Add export error state.
+- [x] Add CSV export buttons on Reports page.
+- [x] Keep XLSX as disabled placeholder.
+- [x] Verify inventory monthly export works.
+- [x] Verify product list export works.
+- [x] Verify sales export works.
+- [x] Verify profit export works.
+- [x] Verify CSV contains Excel-friendly BOM.
+- [x] Verify Thai text is readable in CSV response.
+- [x] Backend build verified.
+- [x] Frontend build verified.
+
+## Prompt 12: Product Import from CSV/Excel
+
+- [x] Add `GET /api/v1/imports/products/template`.
+- [x] Add `POST /api/v1/imports/products/preview`.
+- [x] Add `POST /api/v1/imports/products/confirm`.
+- [x] Add `GET /api/v1/imports`.
+- [x] Add `GET /api/v1/imports/{id}`.
+- [x] Include template fields `sku`, `name`, `barcode`, `category`, `selling_price`, `unit_cost`, `threshold`, `reorder_point`, `location`, and `initial_stock`.
+- [x] Validate SKU is required.
+- [x] Validate name is required.
+- [x] Validate selling price is greater than 0.
+- [x] Validate unit cost is greater than or equal to 0.
+- [x] Show duplicate SKU as row-level error.
+- [x] Keep invalid rows from being imported.
+- [x] Store preview before saving products.
+- [x] Require confirm before writing products and stock.
+- [x] Create product stock and `IMPORT` stock movement when initial stock is provided.
+- [x] Store import jobs and import row errors.
+- [x] Add Imports page.
+- [x] Add download template button.
+- [x] Add upload file area.
+- [x] Add preview table.
+- [x] Add row-level error display.
+- [x] Add confirm import button.
+- [x] Add import history/detail.
+- [x] Add responsive preview/history cards.
+- [x] Verify template download works with Thai text.
+- [x] Verify valid file previews and imports.
+- [x] Verify invalid rows show errors.
+- [x] Verify duplicate SKU is clearly warned.
+- [x] Verify import does not save until confirm.
+- [x] Backend build verified.
+- [x] Frontend build verified.
+
+Note: CSV import is implemented. XLSX uploads are rejected with a clear `400` message for this version.

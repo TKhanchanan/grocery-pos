@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -215,42 +214,6 @@ func insertStockMovement(ctx context.Context, tx *sql.Tx, productID, locationID 
 	}
 	id, _ := result.LastInsertId()
 	return uint64(id), nil
-}
-
-func recalculateAlerts(ctx context.Context, tx *sql.Tx, productID, locationID uint64) error {
-	var productName, locationName string
-	var quantity, threshold, reorderPoint int
-	if err := tx.QueryRowContext(ctx, `
-		SELECT p.name, l.name, ps.quantity, p.threshold, p.reorder_point
-		FROM products p
-		JOIN locations l ON l.id=?
-		JOIN product_stocks ps ON ps.product_id=p.id AND ps.location_id=l.id
-		WHERE p.id=?`, locationID, productID).Scan(&productName, &locationName, &quantity, &threshold, &reorderPoint); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE alerts SET resolved_at=NOW() WHERE product_id=? AND location_id=? AND resolved_at IS NULL`, productID, locationID); err != nil {
-		return err
-	}
-	insertAlert := func(alertType, message string) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO alerts(product_id, location_id, type, message) VALUES (?, ?, ?, ?)`, productID, locationID, alertType, message)
-		return err
-	}
-	if quantity == 0 {
-		if err := insertAlert("OUT_OF_STOCK", fmt.Sprintf("%s out of stock at %s", productName, locationName)); err != nil {
-			return err
-		}
-	}
-	if threshold > 0 && quantity <= threshold {
-		if err := insertAlert("LOW_STOCK", fmt.Sprintf("%s low stock at %s: %d", productName, locationName, quantity)); err != nil {
-			return err
-		}
-	}
-	if reorderPoint > 0 && quantity <= reorderPoint {
-		if err := insertAlert("REORDER_POINT", fmt.Sprintf("%s reached reorder point at %s: %d", productName, locationName, quantity)); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s *Server) stockMovementByID(ctx context.Context, id uint64) (StockMovement, error) {
