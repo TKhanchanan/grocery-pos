@@ -14,7 +14,8 @@ const categories = ref<Category[]>([])
 const loading = ref(false)
 const error = ref('')
 const form = reactive({ id: 0, name: '', description: '' })
-const canManage = computed(() => auth.can(['ADMIN', 'MANAGER']))
+const canCreate = computed(() => auth.hasPermission('categories.create'))
+const canUpdate = computed(() => auth.hasPermission('categories.update'))
 
 async function load() {
   loading.value = true
@@ -51,13 +52,13 @@ onMounted(load)
   <section>
     <PageHeader title="Categories" eyebrow="Catalog" description="Manage product category names and grouping." />
     <div class="grid gap-4 lg:grid-cols-[340px_1fr]">
-      <AppCard v-if="canManage">
+      <AppCard v-if="canCreate || canUpdate">
         <form class="grid gap-3" @submit.prevent="save">
           <h2 class="font-bold">{{ form.id ? 'Edit category' : 'Create category' }}</h2>
           <AppInput v-model="form.name" label="Name" />
           <AppInput v-model="form.description" label="Description" />
           <div class="flex gap-2">
-            <AppButton type="submit">{{ form.id ? 'Save' : 'Create' }}</AppButton>
+            <AppButton type="submit" :disabled="(!form.id && !canCreate) || (Boolean(form.id) && !canUpdate)">{{ form.id ? 'Save' : 'Create' }}</AppButton>
             <AppButton v-if="form.id" variant="secondary" @click="reset">Cancel</AppButton>
           </div>
         </form>
@@ -74,7 +75,7 @@ onMounted(load)
                 <td class="px-3 py-2 font-semibold">{{ item.name }}</td>
                 <td class="px-3 py-2">{{ item.description || '-' }}</td>
                 <td class="px-3 py-2">{{ item.is_active ? 'Active' : 'Inactive' }}</td>
-                <td class="px-3 py-2"><AppButton v-if="canManage" variant="secondary" @click="edit(item)">Edit</AppButton></td>
+                <td class="px-3 py-2"><AppButton v-if="canUpdate" variant="secondary" @click="edit(item)">Edit</AppButton></td>
               </tr>
             </tbody>
           </table>

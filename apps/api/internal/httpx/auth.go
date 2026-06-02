@@ -25,12 +25,19 @@ const (
 )
 
 type User struct {
-	ID        uint64    `json:"id"`
-	Username  string    `json:"username"`
-	FullName  string    `json:"fullName"`
-	Role      Role      `json:"role"`
-	Active    bool      `json:"active"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        uint64     `json:"id"`
+	Username  string     `json:"username"`
+	FullName  string     `json:"fullName"`
+	Role      Role       `json:"role"`
+	Roles     []UserRole `json:"roles,omitempty"`
+	Active    bool       `json:"active"`
+	CreatedAt time.Time  `json:"createdAt"`
+}
+
+type UserRole struct {
+	ID   uint64 `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
 }
 
 type contextKey string
@@ -64,8 +71,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, map[string]any{
-		"token": token,
-		"user":  user,
+		"token":       token,
+		"user":        user,
+		"roles":       s.rolesForUser(r.Context(), user),
+		"permissions": s.permissionsForUser(r.Context(), user),
 	})
 }
 
@@ -79,7 +88,11 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		response.ErrorJSON(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required.")
 		return
 	}
-	response.JSON(w, http.StatusOK, user)
+	response.JSON(w, http.StatusOK, map[string]any{
+		"user":        user,
+		"roles":       s.rolesForUser(r.Context(), user),
+		"permissions": s.permissionsForUser(r.Context(), user),
+	})
 }
 
 func (s *Server) users(w http.ResponseWriter, r *http.Request) {
@@ -99,6 +112,7 @@ func (s *Server) users(w http.ResponseWriter, r *http.Request) {
 				response.ErrorJSON(w, http.StatusInternalServerError, "SCAN_FAILED", "Could not read users.")
 				return
 			}
+			user.Roles = s.rolesForUser(r.Context(), user)
 			users = append(users, user)
 		}
 		response.JSON(w, http.StatusOK, users)
@@ -180,11 +194,12 @@ func (s *Server) userStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 type userInput struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	FullName string `json:"fullName"`
-	Role     Role   `json:"role"`
-	Active   bool   `json:"active"`
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	FullName string   `json:"fullName"`
+	Role     Role     `json:"role"`
+	RoleIDs  []uint64 `json:"role_ids"`
+	Active   bool     `json:"active"`
 }
 
 func (s *Server) createUser(ctx context.Context, body userInput) (User, error) {
@@ -203,6 +218,9 @@ func (s *Server) createUser(ctx context.Context, body userInput) (User, error) {
 		return User{}, err
 	}
 	id, _ := result.LastInsertId()
+	if err := s.assignRolesToUser(ctx, uint64(id), body.RoleIDs, body.Role); err != nil {
+		return User{}, err
+	}
 	return s.userByID(ctx, uint64(id))
 }
 
@@ -228,6 +246,9 @@ func (s *Server) updateUser(ctx context.Context, id uint64, body userInput) (Use
 			return User{}, err
 		}
 	}
+	if err := s.assignRolesToUser(ctx, id, body.RoleIDs, body.Role); err != nil {
+		return User{}, err
+	}
 	return s.userByID(ctx, id)
 }
 
@@ -246,6 +267,7 @@ func (s *Server) userByID(ctx context.Context, id uint64) (User, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, err
 	}
+	user.Roles = s.rolesForUser(ctx, user)
 	return user, err
 }
 
@@ -300,6 +322,30 @@ func (s *Server) requireRoles(next http.HandlerFunc, roles ...Role) http.Handler
 		user, _ := currentUser(r.Context())
 		for _, role := range roles {
 			if user.Role == role {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		response.ErrorJSON(w, http.StatusForbidden, "FORBIDDEN", "You do not have permission to access this resource.")
+	})
+}
+
+func (s *Server) requirePermission(next http.HandlerFunc, permission string) http.HandlerFunc {
+	return s.auth(func(w http.ResponseWriter, r *http.Request) {
+		user, _ := currentUser(r.Context())
+		if s.userHasPermission(r.Context(), user, permission) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		response.ErrorJSON(w, http.StatusForbidden, "FORBIDDEN", "You do not have permission to access this resource.")
+	})
+}
+
+func (s *Server) requireAnyPermission(next http.HandlerFunc, permissions ...string) http.HandlerFunc {
+	return s.auth(func(w http.ResponseWriter, r *http.Request) {
+		user, _ := currentUser(r.Context())
+		for _, permission := range permissions {
+			if s.userHasPermission(r.Context(), user, permission) {
 				next.ServeHTTP(w, r)
 				return
 			}

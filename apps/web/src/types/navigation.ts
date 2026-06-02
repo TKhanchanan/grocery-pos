@@ -5,18 +5,58 @@ export interface NavigationItem {
   labelKey: TranslationKey
   to: string
   roles?: Role[]
+  permission?: PermissionCode
   icon?: IconName
 }
 
 export type Role = 'ADMIN' | 'MANAGER' | 'CASHIER'
+export type PermissionCode = string
+
+export interface AssignedRole {
+  id: number
+  code: string
+  name: string
+}
 
 export interface User {
   id: number
   username: string
   fullName: string
   role: Role
+  roles?: AssignedRole[]
   active: boolean
   createdAt: string
+}
+
+export interface AuthMeResponse {
+  user: User
+  roles: AssignedRole[]
+  permissions: PermissionCode[]
+}
+
+export interface RoleRecord {
+  id: number
+  code: string
+  name: string
+  description: string
+  is_system: boolean
+  is_active: boolean
+  permission_count: number
+  user_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface PermissionRecord {
+  id: number
+  code: string
+  module: string
+  action: string
+  name: string
+  description: string
+  sort_order: number
+  created_at: string
+  updated_at: string
 }
 
 export interface Category {

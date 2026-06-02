@@ -67,6 +67,12 @@ npm run dev
 29. Open Settings.
 30. Configure LINE settings and use Test Send if valid credentials are available.
 31. Confirm notification logs show sent/failed/skipped states.
+32. Open Roles.
+33. Create role `Inventory Staff`.
+34. Assign `products.view`, `stock.view`, `stock.restock`, and `stock.movements.view`.
+35. Open Users and assign the new role to a user.
+36. Login as that user and confirm only allowed menus/actions are visible.
+37. Try direct access to Reports and confirm the Forbidden page appears.
 
 ## Responsive QA Checklist
 

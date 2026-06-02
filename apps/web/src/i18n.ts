@@ -75,6 +75,7 @@ export const messages = {
     'nav.purchaseOrders': 'Purchase Orders',
     'nav.suppliers': 'Suppliers',
     'nav.users': 'Users',
+    'nav.roles': 'Roles',
     'nav.settings': 'Settings',
   },
   th: {
@@ -150,6 +151,7 @@ export const messages = {
     'nav.purchaseOrders': 'ใบสั่งซื้อ',
     'nav.suppliers': 'ซัพพลายเออร์',
     'nav.users': 'ผู้ใช้',
+    'nav.roles': 'บทบาทและสิทธิ์',
     'nav.settings': 'ตั้งค่า',
   },
 } as const

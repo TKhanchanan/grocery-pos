@@ -92,3 +92,16 @@ Latest verification:
 - Seed data includes Thai locations `หน้าร้าน`, `คลังหลัก` and demo products `ไข่เค็ม`, `มาม่า`, `น้ำอัดลม`.
 - CSV exports include a UTF-8 BOM so Thai text opens correctly in Excel.
 - LINE notification settings are configurable from Settings. LINE failures are logged and do not break core sale/restock/PO flows.
+- Dynamic roles and permissions are managed from the Roles page. Existing `ADMIN`, `MANAGER`, and `CASHIER` users are migrated into system roles by `011_dynamic_rbac.sql`.
+
+## Migration Notes
+
+Fresh Docker initialization runs `001_init.sql`, demo seed data, then `011_dynamic_rbac.sql`.
+
+For an existing database, apply:
+
+```bash
+mysql -u grocery -p grocery_pos < apps/api/migrations/011_dynamic_rbac.sql
+```
+
+The migration keeps the legacy `users.role` column for compatibility while adding `roles`, `permissions`, `role_permissions`, `user_roles`, and `audit_logs`.

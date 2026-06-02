@@ -14,7 +14,9 @@ const locations = ref<Location[]>([])
 const loading = ref(false)
 const error = ref('')
 const form = reactive({ id: 0, name: '', description: '' })
-const canManage = computed(() => auth.can(['ADMIN', 'MANAGER']))
+const canCreate = computed(() => auth.hasPermission('locations.create'))
+const canUpdate = computed(() => auth.hasPermission('locations.update'))
+const canDeactivate = computed(() => auth.hasPermission('locations.deactivate'))
 
 async function load() {
   loading.value = true
@@ -56,13 +58,13 @@ onMounted(load)
   <section>
     <PageHeader title="Locations" eyebrow="Inventory" description="Manage shop front, warehouse, and other inventory locations." />
     <div class="grid gap-4 lg:grid-cols-[340px_1fr]">
-      <AppCard v-if="canManage">
+      <AppCard v-if="canCreate || canUpdate">
         <form class="grid gap-3" @submit.prevent="save">
           <h2 class="font-bold">{{ form.id ? 'Edit location' : 'Create location' }}</h2>
           <AppInput v-model="form.name" label="Name" />
           <AppInput v-model="form.description" label="Description" />
           <div class="flex gap-2">
-            <AppButton type="submit">{{ form.id ? 'Save' : 'Create' }}</AppButton>
+            <AppButton type="submit" :disabled="(!form.id && !canCreate) || (Boolean(form.id) && !canUpdate)">{{ form.id ? 'Save' : 'Create' }}</AppButton>
             <AppButton v-if="form.id" variant="secondary" @click="reset">Cancel</AppButton>
           </div>
         </form>
@@ -80,8 +82,8 @@ onMounted(load)
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <span class="rounded-full px-2 py-1 text-xs font-bold" :class="item.is_active ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-600'">{{ item.is_active ? 'Active' : 'Inactive' }}</span>
-                <AppButton v-if="canManage" variant="secondary" @click="edit(item)">Edit</AppButton>
-                <AppButton v-if="canManage" :variant="item.is_active ? 'danger' : 'secondary'" @click="setActive(item, !item.is_active)">{{ item.is_active ? 'Deactivate' : 'Activate' }}</AppButton>
+                <AppButton v-if="canUpdate" variant="secondary" @click="edit(item)">Edit</AppButton>
+                <AppButton v-if="canDeactivate" :variant="item.is_active ? 'danger' : 'secondary'" @click="setActive(item, !item.is_active)">{{ item.is_active ? 'Deactivate' : 'Activate' }}</AppButton>
               </div>
             </div>
           </article>

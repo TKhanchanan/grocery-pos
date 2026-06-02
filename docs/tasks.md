@@ -461,3 +461,31 @@ Note: CSV import is implemented. XLSX uploads are rejected with a clear `400` me
 - [x] Run frontend build.
 
 Note: Browser automation was not available in this session, so responsive QA was completed by code review plus production build verification.
+
+## Prompt 17: Dynamic Role & Permission Management CRUD
+
+- [x] Add dynamic RBAC migration.
+- [x] Add `roles`, `permissions`, `role_permissions`, `user_roles`, and `audit_logs`.
+- [x] Keep legacy `users.role` column for safe migration.
+- [x] Seed system roles `ADMIN`, `MANAGER`, and `CASHIER`.
+- [x] Seed stable permission codes by module/action.
+- [x] Assign all permissions to `ADMIN`.
+- [x] Assign operational permissions to `MANAGER`.
+- [x] Assign POS/product/sales/alert permissions to `CASHIER`.
+- [x] Migrate existing users into `user_roles`.
+- [x] Update `/api/v1/auth/me` to return user, roles, and permissions.
+- [x] Add permission middleware and apply it to protected backend endpoints.
+- [x] Add role CRUD APIs.
+- [x] Add permission list/grouped APIs.
+- [x] Add role permission assignment API.
+- [x] Add user role assignment API.
+- [x] Add audit logging for role and permission changes.
+- [x] Add frontend permission helpers.
+- [x] Update route guards and sidebar menu visibility to use permission codes.
+- [x] Add premium Roles & Permissions page.
+- [x] Update Users page for dynamic role assignment.
+- [x] Hide/disable key product/category/location actions by permission.
+- [x] Backend tests/build verified.
+- [x] Frontend build verified.
+
+Note: Existing users should keep access after applying `011_dynamic_rbac.sql`. Users with old sessions should refresh or log in again so `/auth/me` reloads the new permission list.

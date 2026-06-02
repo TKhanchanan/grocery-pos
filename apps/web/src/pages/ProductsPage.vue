@@ -50,7 +50,10 @@ const form = reactive<ProductForm>({
   is_active: true,
 })
 
-const canManage = computed(() => auth.can(['ADMIN', 'MANAGER']))
+const canCreate = computed(() => auth.hasPermission('products.create'))
+const canUpdate = computed(() => auth.hasPermission('products.update'))
+const canDeactivate = computed(() => auth.hasPermission('products.deactivate'))
+const canManage = computed(() => canCreate.value || canUpdate.value)
 const activeCount = computed(() => products.value.filter((product) => product.is_active).length)
 const lowSignalCount = computed(() => products.value.filter((product) => product.stock_status !== 'in_stock').length)
 const totalStock = computed(() => products.value.reduce((sum, product) => sum + product.total_stock, 0))
@@ -207,7 +210,7 @@ onMounted(load)
           <AppCheckbox v-model="form.is_active" label="Active" description="Inactive products stay in history but cannot be sold." />
           <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
           <div class="flex gap-2">
-            <AppButton type="submit" :loading="saving" :disabled="saving" icon="check-circle">{{ form.id ? 'Save' : 'Create' }}</AppButton>
+            <AppButton type="submit" :loading="saving" :disabled="saving || (!form.id && !canCreate) || (Boolean(form.id) && !canUpdate)" icon="check-circle">{{ form.id ? 'Save' : 'Create' }}</AppButton>
             <AppButton v-if="form.id" variant="secondary" icon="x" @click="resetForm">Cancel</AppButton>
           </div>
         </form>
@@ -272,8 +275,8 @@ onMounted(load)
                     <td class="px-3 py-2">
                       <div class="flex flex-wrap gap-2">
                         <AppButton variant="secondary" icon="map-pin" @click="showStocks(product)">Stocks</AppButton>
-                        <AppButton v-if="canManage" variant="secondary" icon="settings" @click="edit(product)">Edit</AppButton>
-                        <AppButton v-if="canManage" :variant="product.is_active ? 'danger' : 'secondary'" @click="setActive(product, !product.is_active)">
+                        <AppButton v-if="canUpdate" variant="secondary" icon="settings" @click="edit(product)">Edit</AppButton>
+                        <AppButton v-if="canDeactivate" :variant="product.is_active ? 'danger' : 'secondary'" @click="setActive(product, !product.is_active)">
                           {{ product.is_active ? 'Deactivate' : 'Activate' }}
                         </AppButton>
                       </div>
@@ -300,7 +303,7 @@ onMounted(load)
                 </dl>
                 <div class="mt-3 flex flex-wrap gap-2">
                   <AppButton variant="secondary" icon="map-pin" @click="showStocks(product)">Stocks</AppButton>
-                  <AppButton v-if="canManage" variant="secondary" icon="settings" @click="edit(product)">Edit</AppButton>
+                  <AppButton v-if="canUpdate" variant="secondary" icon="settings" @click="edit(product)">Edit</AppButton>
                 </div>
               </article>
             </div>

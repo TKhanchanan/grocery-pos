@@ -13,27 +13,28 @@ const auth = useAuthStore()
 const route = useRoute()
 
 const navItems: NavigationItem[] = [
-  { labelKey: 'nav.dashboard', to: '/dashboard', icon: 'layout-dashboard' },
-  { labelKey: 'nav.pos', to: '/pos', roles: ['ADMIN', 'CASHIER'], icon: 'shopping-cart' },
-  { labelKey: 'nav.products', to: '/products', roles: ['ADMIN', 'MANAGER', 'CASHIER'], icon: 'package' },
-  { labelKey: 'nav.categories', to: '/categories', roles: ['ADMIN', 'MANAGER'], icon: 'tags' },
-  { labelKey: 'nav.restock', to: '/restock', roles: ['ADMIN', 'MANAGER'], icon: 'package-plus' },
-  { labelKey: 'nav.stockMovements', to: '/stock-movements', roles: ['ADMIN', 'MANAGER'], icon: 'history' },
-  { labelKey: 'nav.locations', to: '/locations', roles: ['ADMIN', 'MANAGER'], icon: 'map-pin' },
-  { labelKey: 'nav.transfers', to: '/transfers', roles: ['ADMIN', 'MANAGER'], icon: 'arrow-left-right' },
-  { labelKey: 'nav.salesHistory', to: '/sales-history', roles: ['ADMIN', 'MANAGER', 'CASHIER'], icon: 'receipt-text' },
-  { labelKey: 'nav.receiptDetail', to: '/receipt-detail', roles: ['ADMIN', 'MANAGER', 'CASHIER'], icon: 'receipt-text' },
-  { labelKey: 'nav.alerts', to: '/alerts', roles: ['ADMIN', 'MANAGER', 'CASHIER'], icon: 'bell' },
-  { labelKey: 'nav.reports', to: '/reports', roles: ['ADMIN', 'MANAGER'], icon: 'chart-column' },
-  { labelKey: 'nav.exports', to: '/exports', roles: ['ADMIN', 'MANAGER'], icon: 'download' },
-  { labelKey: 'nav.imports', to: '/imports', roles: ['ADMIN', 'MANAGER'], icon: 'upload' },
-  { labelKey: 'nav.purchaseOrders', to: '/purchase-orders', roles: ['ADMIN', 'MANAGER'], icon: 'clipboard-list' },
-  { labelKey: 'nav.suppliers', to: '/suppliers', roles: ['ADMIN', 'MANAGER'], icon: 'truck' },
-  { labelKey: 'nav.users', to: '/users', roles: ['ADMIN'], icon: 'users' },
-  { labelKey: 'nav.settings', to: '/settings', roles: ['ADMIN'], icon: 'settings' },
+  { labelKey: 'nav.dashboard', to: '/dashboard', permission: 'dashboard.view', icon: 'layout-dashboard' },
+  { labelKey: 'nav.pos', to: '/pos', permission: 'pos.view', icon: 'shopping-cart' },
+  { labelKey: 'nav.products', to: '/products', permission: 'products.view', icon: 'package' },
+  { labelKey: 'nav.categories', to: '/categories', permission: 'categories.view', icon: 'tags' },
+  { labelKey: 'nav.restock', to: '/restock', permission: 'stock.restock', icon: 'package-plus' },
+  { labelKey: 'nav.stockMovements', to: '/stock-movements', permission: 'stock.movements.view', icon: 'history' },
+  { labelKey: 'nav.locations', to: '/locations', permission: 'locations.view', icon: 'map-pin' },
+  { labelKey: 'nav.transfers', to: '/transfers', permission: 'transfers.view', icon: 'arrow-left-right' },
+  { labelKey: 'nav.salesHistory', to: '/sales-history', permission: 'sales.view', icon: 'receipt-text' },
+  { labelKey: 'nav.receiptDetail', to: '/receipt-detail', permission: 'sales.receipt.view', icon: 'receipt-text' },
+  { labelKey: 'nav.alerts', to: '/alerts', permission: 'alerts.view', icon: 'bell' },
+  { labelKey: 'nav.reports', to: '/reports', permission: 'reports.view', icon: 'chart-column' },
+  { labelKey: 'nav.exports', to: '/exports', permission: 'exports.view', icon: 'download' },
+  { labelKey: 'nav.imports', to: '/imports', permission: 'imports.view', icon: 'upload' },
+  { labelKey: 'nav.purchaseOrders', to: '/purchase-orders', permission: 'purchase_orders.view', icon: 'clipboard-list' },
+  { labelKey: 'nav.suppliers', to: '/suppliers', permission: 'suppliers.view', icon: 'truck' },
+  { labelKey: 'nav.users', to: '/users', permission: 'users.view', icon: 'users' },
+  { labelKey: 'nav.roles', to: '/roles', permission: 'roles.view', icon: 'settings' },
+  { labelKey: 'nav.settings', to: '/settings', permission: 'settings.view', icon: 'settings' },
 ]
 
-const visibleNavItems = computed(() => navItems.filter((item) => auth.can(item.roles)))
+const visibleNavItems = computed(() => navItems.filter((item) => auth.canViewMenu(item)))
 
 function isActive(to: string) {
   return route.path === to
