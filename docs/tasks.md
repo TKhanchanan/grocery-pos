@@ -1,42 +1,109 @@
-# Grocery POS & Inventory System Tasks
+# Tasks
 
-## Status
+## Prompt 1: Project Foundation
 
-- [x] Project foundation: Go API, Vue 3/Vite/TypeScript frontend, Pinia, Vue Router, Tailwind CSS.
-- [x] Database schema and seed data: MySQL 8 InnoDB, utf8mb4, demo users, locations, products, supplier, stock, alerts.
-- [x] Auth and role guard: bcrypt password hashes, JWT auth, ADMIN/MANAGER/CASHIER route permissions.
-- [x] UI design system and responsive layout: reusable controls, panels, tables, loading/error/empty state component.
-- [x] Products and categories: product CRUD V1 with SKU, optional unique barcode, threshold, reorder point.
-- [x] Locations and product stocks: multi-location stock using `product_stocks` as source of truth.
-- [x] Restock and stock movements: transaction-backed stock increase and movement records.
-- [x] Stock adjustment: positive/negative adjustments with non-negative stock enforcement.
-- [x] Stock transfer: source/destination movements in one transaction.
-- [x] POS cart and sale transaction: sale snapshots, insufficient stock/payment checks, stock row locks, receipt.
-- [x] Barcode: manual barcode search plus camera-scan fallback path via decoded input.
-- [x] Receipt: receipt detail returned by API and shown after checkout.
-- [x] Sales history and cancel sale: cancelled sales retained, stock restored, movement created.
-- [x] Alerts: low stock, out-of-stock, and reorder point alerts regenerated after stock changes.
-- [x] Dashboard: daily revenue, profit, sale count, items sold, inventory value, alert counts.
-- [x] Reports: daily/monthly sales, best-selling, profit per product, stock, valuation, payment summary.
-- [x] Export: CSV export endpoints and frontend download.
-- [x] Import: CSV product import endpoint and template columns documented in UI.
-- [x] Suppliers and purchase orders: supplier CRUD V1, PO creation, PO receive into stock.
-- [x] LINE notification: backend hook sends broadcast when `LINE_CHANNEL_ACCESS_TOKEN` is configured.
-- [x] Settings: admin settings screen and API.
-- [x] Final responsive polish: mobile-friendly navigation, forms, cards, and tables.
-- [x] Build/test/deploy docs: README and Docker Compose for MySQL.
+- [x] Create monorepo structure with `apps/api` and `apps/web`.
+- [x] Create Go backend HTTP server.
+- [x] Add MySQL connection helper.
+- [x] Add config loader.
+- [x] Add health endpoint.
+- [x] Add version endpoint.
+- [x] Add standard JSON response format.
+- [x] Add standard error format.
+- [x] Add CORS middleware.
+- [x] Add request logger middleware.
+- [x] Add panic recovery middleware.
+- [x] Add transaction helper.
+- [x] Add migration folder.
+- [x] Add seed folder.
+- [x] Add README.
+- [x] Add `.env.example`.
+- [x] Add `docs/roadmap.md`.
+- [x] Add `docs/tasks.md`.
+- [x] Add `docs/demo-script.md`.
+- [x] Set up Vue 3, Vite, TypeScript, Tailwind CSS, Pinia, and Vue Router.
+- [x] Add API client.
+- [x] Add Auth layout.
+- [x] Add App layout.
+- [x] Add responsive sidebar and mobile drawer.
+- [x] Add topbar.
+- [x] Add user menu placeholder.
+- [x] Add alert badge placeholder.
+- [x] Add placeholder pages for all requested modules.
+- [x] Add requested reusable components.
+- [x] Backend build verified.
+- [x] Frontend build verified.
 
-## Verification
+## Prompt 2: Full MySQL Schema and Seed Data
 
-- [x] Backend build: `GOCACHE=/private/tmp/grocery-pos-gocache GOMODCACHE=/Users/thanyanan/Documents/GitHub/Grocery-POS/backend/.gomodcache go build ./...`
-- [x] Frontend build: `npm run build`
+- [x] Create full MySQL 8 schema migration.
+- [x] Use InnoDB and utf8mb4.
+- [x] Use `BIGINT UNSIGNED AUTO_INCREMENT` primary keys.
+- [x] Use `DECIMAL(10,2)` money columns.
+- [x] Use `DATETIME` timestamps.
+- [x] Add foreign keys for important relationships.
+- [x] Add indexes for search and report columns.
+- [x] Create `users`.
+- [x] Create `categories`.
+- [x] Create `products`.
+- [x] Create `locations`.
+- [x] Create `product_stocks`.
+- [x] Create `stock_movements`.
+- [x] Create `stock_transfers`.
+- [x] Create `stock_transfer_items`.
+- [x] Create `sales`.
+- [x] Create `sale_items`.
+- [x] Create `alerts`.
+- [x] Create `suppliers`.
+- [x] Create `purchase_orders`.
+- [x] Create `purchase_order_items`.
+- [x] Create `notification_logs`.
+- [x] Create `import_jobs`.
+- [x] Create `import_job_rows`.
+- [x] Create `settings`.
+- [x] Keep multi-location stock source of truth in `product_stocks`.
+- [x] Keep product name non-unique.
+- [x] Keep SKU unique.
+- [x] Keep barcode optional and unique when provided.
+- [x] Seed admin, manager, and cashier users.
+- [x] Seed `หน้าร้าน` and `คลังหลัก` locations.
+- [x] Seed `ไข่เค็ม`, `มาม่า`, and `น้ำอัดลม` products.
+- [x] Seed demo product stock.
+- [x] Seed sample categories.
+- [x] Seed sample supplier.
+- [x] Seed basic settings.
+- [x] Run migration against MySQL.
+- [x] Run seed against MySQL.
+- [x] Verify Thai text is stored and displayed correctly.
 
-## Demo Flow
+## Prompt 3: Auth, Users, Roles, Security
 
-1. Start MySQL with `docker compose up -d mysql`.
-2. Start API from `backend` with `go run ./cmd/api`.
-3. Start frontend from `frontend` with `npm run dev`.
-4. Login with `admin` / `password`.
-5. Open Dashboard, Products, Inventory, POS, Sales, Reports, Suppliers & PO, and Settings.
-6. Restock `ไข่เค็ม` 100 units into `หน้าร้าน`, sell 3 units in POS, confirm receipt, verify stock decreases, cancel the sale, and verify stock returns.
-7. Export inventory or valuation CSV, create a purchase order from a low/reorder product, receive it, then transfer stock between `คลังหลัก` and `หน้าร้าน`.
+- [x] Add bcrypt password verification and hashing.
+- [x] Add JWT login tokens.
+- [x] Add `POST /api/v1/auth/login`.
+- [x] Add `POST /api/v1/auth/logout`.
+- [x] Add `GET /api/v1/auth/me`.
+- [x] Add auth middleware.
+- [x] Add role middleware.
+- [x] Add `GET /api/v1/users`.
+- [x] Add `POST /api/v1/users`.
+- [x] Add `GET /api/v1/users/{id}`.
+- [x] Add `PATCH /api/v1/users/{id}`.
+- [x] Add `PATCH /api/v1/users/{id}/status`.
+- [x] Return standard 401 and 403 errors.
+- [x] Avoid returning `password_hash`.
+- [x] Add login page.
+- [x] Add auth Pinia store.
+- [x] Add route guard.
+- [x] Add role-based sidebar menu.
+- [x] Add forbidden page.
+- [x] Add users page.
+- [x] Add create/edit user form.
+- [x] Add disable/enable user action.
+- [x] Verify admin login.
+- [x] Verify manager login.
+- [x] Verify cashier login.
+- [x] Verify cashier receives backend 403 for users.
+- [x] Verify frontend hides unauthorized menus by role.
+- [x] Backend build verified.
+- [x] Frontend build verified.

@@ -1,4 +1,7 @@
 backend/.gomodcache/
 frontend/node_modules/
 frontend/dist/
+apps/api/.gomodcache/
+apps/web/node_modules/
+apps/web/dist/
 .DS_Store
