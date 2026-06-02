@@ -61,3 +61,46 @@ export interface Product {
   stocks?: ProductStock[]
   created_at: string
 }
+
+export interface StockMovement {
+  id: number
+  product_id: number
+  product_name: string
+  sku: string
+  location_id: number
+  location_name: string
+  reference_type: 'RESTOCK' | 'ADJUSTMENT' | string
+  reference_id: number | null
+  quantity_change: number
+  before_stock: number
+  after_stock: number
+  unit_cost: number | null
+  note: string
+  created_by: number | null
+  created_at: string
+}
+
+export interface StockTransferItem {
+  id?: number
+  transfer_id?: number
+  product_id: number
+  product_name?: string
+  sku?: string
+  quantity: number
+}
+
+export interface StockTransfer {
+  id: number
+  transfer_no: string
+  from_location_id: number
+  from_location_name: string
+  to_location_id: number
+  to_location_name: string
+  status: 'DRAFT' | 'COMPLETED' | 'CANCELLED'
+  note: string
+  created_by: number | null
+  completed_at: string | null
+  cancelled_at: string | null
+  created_at: string
+  items: StockTransferItem[]
+}

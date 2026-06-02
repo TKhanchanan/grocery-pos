@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   reference_type VARCHAR(40) NOT NULL,
   reference_id BIGINT UNSIGNED NULL,
   quantity_change INT NOT NULL,
+  before_stock INT NOT NULL DEFAULT 0,
+  after_stock INT NOT NULL DEFAULT 0,
   quantity_after INT NULL,
   unit_cost DECIMAL(10,2) NULL,
   note VARCHAR(255) NOT NULL DEFAULT '',

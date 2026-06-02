@@ -140,3 +140,68 @@
 - [x] Verify location stock is visible.
 - [x] Backend build verified.
 - [x] Frontend build verified.
+
+## Prompt 5: Restock, Stock Adjustment, Stock Movements
+
+- [x] Add stock movement before/after migration.
+- [x] Add `POST /api/v1/products/{id}/restock`.
+- [x] Add `POST /api/v1/products/{id}/adjust-stock`.
+- [x] Add `GET /api/v1/stock-movements`.
+- [x] Validate restock quantity greater than 0.
+- [x] Calculate unit cost from total cost divided by quantity.
+- [x] Update product latest unit cost on restock.
+- [x] Add stock into selected `product_stocks` location.
+- [x] Create `RESTOCK` stock movement with before/after stock.
+- [x] Recalculate alerts after restock.
+- [x] Require adjustment note.
+- [x] Prevent adjustment from making stock negative.
+- [x] Create `ADJUSTMENT` stock movement.
+- [x] Use database transactions for stock-changing operations.
+- [x] Add restock page with product selector and location selector.
+- [x] Add current stock display.
+- [x] Add quantity and total cost inputs.
+- [x] Add unit cost preview.
+- [x] Add stock after restock preview.
+- [x] Add stock adjustment modal.
+- [x] Add stock movement history page.
+- [x] Add responsive movement table/cards.
+- [x] Verify restock `ไข่เค็ม` 100 units total cost 200 into `หน้าร้าน`.
+- [x] Verify stock increases correctly.
+- [x] Verify unit cost preview/result is 2 บาท.
+- [x] Verify movement history shows before/after stock.
+- [x] Verify adjustment cannot make stock negative.
+- [x] Backend build verified.
+- [x] Frontend build verified.
+
+## Prompt 6: Stock Transfer Between Locations
+
+- [x] Add `GET /api/v1/stock-transfers`.
+- [x] Add `POST /api/v1/stock-transfers`.
+- [x] Add `GET /api/v1/stock-transfers/{id}`.
+- [x] Add `POST /api/v1/stock-transfers/{id}/complete`.
+- [x] Add `POST /api/v1/stock-transfers/{id}/cancel`.
+- [x] Validate source and destination locations are different.
+- [x] Validate source stock before transfer completion.
+- [x] Block transfers greater than available stock.
+- [x] Complete transfer in a transaction.
+- [x] Deduct source location stock.
+- [x] Add destination location stock.
+- [x] Create `TRANSFER_OUT` movement.
+- [x] Create `TRANSFER_IN` movement.
+- [x] Prevent negative stock.
+- [x] Add transfer list.
+- [x] Add transfer form.
+- [x] Add source location selector.
+- [x] Add destination location selector.
+- [x] Add product selector.
+- [x] Add quantity input.
+- [x] Show available source stock.
+- [x] Add transfer detail.
+- [x] Add responsive transfer UI.
+- [x] Verify transfer `มาม่า` from `คลังหลัก` to `หน้าร้าน`.
+- [x] Verify source stock decreases.
+- [x] Verify destination stock increases.
+- [x] Verify movement history is correct.
+- [x] Verify insufficient stock is blocked.
+- [x] Backend build verified.
+- [x] Frontend build verified.
