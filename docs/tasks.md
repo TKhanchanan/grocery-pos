@@ -107,3 +107,36 @@
 - [x] Verify frontend hides unauthorized menus by role.
 - [x] Backend build verified.
 - [x] Frontend build verified.
+
+## Prompt 4: Categories, Products, Product Stock, Locations
+
+- [x] Add category APIs.
+- [x] Add product APIs.
+- [x] Add product status API for deactivate/reactivate.
+- [x] Add location APIs.
+- [x] Add location status API.
+- [x] Add product stock list API.
+- [x] Add product stock by product API.
+- [x] Validate product price is greater than 0.
+- [x] Validate unit cost is greater than or equal to 0.
+- [x] Keep threshold and reorder point defaulted to 0.
+- [x] Keep product name non-unique.
+- [x] Reject duplicate SKU.
+- [x] Keep barcode optional and unique when provided.
+- [x] Allow cashier product view only.
+- [x] Allow admin and manager product creation/editing.
+- [x] Add category list/form.
+- [x] Add product responsive table and mobile cards.
+- [x] Add product create/edit form.
+- [x] Add stock status badges.
+- [x] Add product stock by location panel.
+- [x] Add location list/form.
+- [x] Add search by name/SKU/barcode.
+- [x] Add filters by category/status/stock status.
+- [x] Verify manager can create product.
+- [x] Verify cashier can view products.
+- [x] Verify cashier receives backend 403 when creating product.
+- [x] Verify duplicate SKU is rejected.
+- [x] Verify location stock is visible.
+- [x] Backend build verified.
+- [x] Frontend build verified.
