@@ -1,5 +1,7 @@
+import type { TranslationKey } from '../i18n'
+
 export interface NavigationItem {
-  label: string
+  labelKey: TranslationKey
   to: string
   roles?: Role[]
 }

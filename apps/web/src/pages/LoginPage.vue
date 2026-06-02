@@ -4,8 +4,10 @@ import { useRouter } from 'vue-router'
 import AppButton from '../components/AppButton.vue'
 import AppInput from '../components/AppInput.vue'
 import AuthLayout from '../layouts/AuthLayout.vue'
+import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 
+const app = useAppStore()
 const auth = useAuthStore()
 const router = useRouter()
 const username = ref('admin')
@@ -31,14 +33,25 @@ async function submit() {
   <AuthLayout>
     <form class="grid gap-4" @submit.prevent="submit">
       <div>
-        <p class="text-xs font-bold uppercase text-brand-700">Secure access</p>
-        <h1 class="mt-1 text-2xl font-bold">Login</h1>
-        <p class="mt-2 text-sm text-slate-500">Demo users: admin, manager, cashier. Password: password.</p>
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-xs font-bold uppercase text-brand-700">{{ app.t('login.secureAccess') }}</p>
+            <h1 class="mt-1 text-2xl font-bold">{{ app.t('login.title') }}</h1>
+          </div>
+          <div class="flex items-center gap-1 rounded-md border border-slate-200 bg-white p-1">
+            <button type="button" class="rounded px-2 py-1 text-xs font-bold" :class="app.language === 'th' ? 'bg-brand-600 text-white' : 'text-slate-600'" @click="app.setLanguage('th')">TH</button>
+            <button type="button" class="rounded px-2 py-1 text-xs font-bold" :class="app.language === 'en' ? 'bg-brand-600 text-white' : 'text-slate-600'" @click="app.setLanguage('en')">EN</button>
+          </div>
+        </div>
+        <p class="mt-2 text-sm text-slate-500">{{ app.t('login.demoUsers') }}</p>
       </div>
-      <AppInput v-model="username" label="Username" autocomplete="username" />
-      <AppInput v-model="password" label="Password" type="password" autocomplete="current-password" />
+      <AppInput v-model="username" :label="app.t('login.username')" autocomplete="username" />
+      <AppInput v-model="password" :label="app.t('login.password')" type="password" autocomplete="current-password" />
       <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
-      <AppButton type="submit" :disabled="loading">{{ loading ? 'Logging in...' : 'Login' }}</AppButton>
+      <div class="grid gap-2 sm:grid-cols-[1fr_auto]">
+        <AppButton type="submit" :disabled="loading">{{ loading ? app.t('login.loading') : app.t('login.submit') }}</AppButton>
+        <AppButton variant="secondary" @click="app.toggleTheme">{{ app.isDark ? app.t('settings.light') : app.t('settings.dark') }}</AppButton>
+      </div>
     </form>
   </AuthLayout>
 </template>
