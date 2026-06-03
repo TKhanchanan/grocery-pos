@@ -18,8 +18,10 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := database.ApplyFirstExistingSQLFile(db, "migrations/011_dynamic_rbac.sql", "apps/api/migrations/011_dynamic_rbac.sql"); err != nil {
-		log.Printf("dynamic RBAC migration skipped: %v", err)
+	for _, migration := range []string{"011_dynamic_rbac.sql", "012_profile_avatar.sql"} {
+		if err := database.ApplyFirstExistingSQLFile(db, "migrations/"+migration, "apps/api/migrations/"+migration); err != nil {
+			log.Printf("%s migration skipped: %v", migration, err)
+		}
 	}
 
 	server := httpx.NewServer(cfg, db)

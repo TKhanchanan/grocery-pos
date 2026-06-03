@@ -192,7 +192,7 @@ onMounted(load)
 
 <template>
   <section>
-    <PageHeader title="จัดการบทบาทและสิทธิ์" eyebrow="Roles & Permissions" description="กำหนดว่าแต่ละบทบาทสามารถเข้าถึงเมนูและทำรายการใดได้บ้าง" icon="settings">
+    <PageHeader title="จัดการบทบาทและสิทธิ์" eyebrow="Roles & Permissions" description="กำหนดว่าแต่ละบทบาทสามารถเข้าถึงเมนูและทำรายการใดได้บ้าง" icon="role">
       <AppButton v-if="canCreate" icon="plus" @click="openCreate">Create role</AppButton>
     </PageHeader>
 

@@ -25,13 +25,15 @@ const (
 )
 
 type User struct {
-	ID        uint64     `json:"id"`
-	Username  string     `json:"username"`
-	FullName  string     `json:"fullName"`
-	Role      Role       `json:"role"`
-	Roles     []UserRole `json:"roles,omitempty"`
-	Active    bool       `json:"active"`
-	CreatedAt time.Time  `json:"createdAt"`
+	ID              uint64     `json:"id"`
+	Username        string     `json:"username"`
+	FullName        string     `json:"fullName"`
+	Role            Role       `json:"role"`
+	Roles           []UserRole `json:"roles,omitempty"`
+	Active          bool       `json:"active"`
+	AvatarURL       string     `json:"avatar_url"`
+	AvatarUpdatedAt *time.Time `json:"avatar_updated_at,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
 }
 
 type UserRole struct {
@@ -98,7 +100,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 func (s *Server) users(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		rows, err := s.db.QueryContext(r.Context(), `SELECT id, username, full_name, role, active, created_at FROM users ORDER BY id`)
+		rows, err := s.db.QueryContext(r.Context(), `SELECT id, username, full_name, role, active, COALESCE(avatar_url, ''), avatar_updated_at, created_at FROM users ORDER BY id`)
 		if err != nil {
 			response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load users.")
 			return
@@ -108,9 +110,13 @@ func (s *Server) users(w http.ResponseWriter, r *http.Request) {
 		users := []User{}
 		for rows.Next() {
 			var user User
-			if err := rows.Scan(&user.ID, &user.Username, &user.FullName, &user.Role, &user.Active, &user.CreatedAt); err != nil {
+			var avatarUpdatedAt sql.NullTime
+			if err := rows.Scan(&user.ID, &user.Username, &user.FullName, &user.Role, &user.Active, &user.AvatarURL, &avatarUpdatedAt, &user.CreatedAt); err != nil {
 				response.ErrorJSON(w, http.StatusInternalServerError, "SCAN_FAILED", "Could not read users.")
 				return
+			}
+			if avatarUpdatedAt.Valid {
+				user.AvatarUpdatedAt = &avatarUpdatedAt.Time
 			}
 			user.Roles = s.rolesForUser(r.Context(), user)
 			users = append(users, user)
@@ -255,17 +261,25 @@ func (s *Server) updateUser(ctx context.Context, id uint64, body userInput) (Use
 func (s *Server) userByUsername(ctx context.Context, username string) (User, string, error) {
 	var user User
 	var hash string
-	err := s.db.QueryRowContext(ctx, `SELECT id, username, full_name, role, active, created_at, password_hash FROM users WHERE username=?`, username).
-		Scan(&user.ID, &user.Username, &user.FullName, &user.Role, &user.Active, &user.CreatedAt, &hash)
+	var avatarUpdatedAt sql.NullTime
+	err := s.db.QueryRowContext(ctx, `SELECT id, username, full_name, role, active, COALESCE(avatar_url, ''), avatar_updated_at, created_at, password_hash FROM users WHERE username=?`, username).
+		Scan(&user.ID, &user.Username, &user.FullName, &user.Role, &user.Active, &user.AvatarURL, &avatarUpdatedAt, &user.CreatedAt, &hash)
+	if avatarUpdatedAt.Valid {
+		user.AvatarUpdatedAt = &avatarUpdatedAt.Time
+	}
 	return user, hash, err
 }
 
 func (s *Server) userByID(ctx context.Context, id uint64) (User, error) {
 	var user User
-	err := s.db.QueryRowContext(ctx, `SELECT id, username, full_name, role, active, created_at FROM users WHERE id=?`, id).
-		Scan(&user.ID, &user.Username, &user.FullName, &user.Role, &user.Active, &user.CreatedAt)
+	var avatarUpdatedAt sql.NullTime
+	err := s.db.QueryRowContext(ctx, `SELECT id, username, full_name, role, active, COALESCE(avatar_url, ''), avatar_updated_at, created_at FROM users WHERE id=?`, id).
+		Scan(&user.ID, &user.Username, &user.FullName, &user.Role, &user.Active, &user.AvatarURL, &avatarUpdatedAt, &user.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, err
+	}
+	if avatarUpdatedAt.Valid {
+		user.AvatarUpdatedAt = &avatarUpdatedAt.Time
 	}
 	user.Roles = s.rolesForUser(ctx, user)
 	return user, err

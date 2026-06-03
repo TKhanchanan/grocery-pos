@@ -8,11 +8,20 @@ export interface ApiEnvelope<T> {
 }
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
+export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '')
+
+export function assetURL(path?: string | null) {
+  if (!path) return ''
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:') || path.startsWith('blob:')) return path
+  return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`
+}
 
 export async function apiClient<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('auth_token')
   const headers = new Headers(init.headers)
-  headers.set('Content-Type', 'application/json')
+  if (!(init.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json')
+  }
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
   }

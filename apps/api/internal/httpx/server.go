@@ -3,6 +3,7 @@ package httpx
 import (
 	"database/sql"
 	"net/http"
+	"os"
 	"time"
 
 	"grocery-pos/apps/api/internal/config"
@@ -26,6 +27,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.auth(s.logout))
 	mux.HandleFunc("GET /api/v1/auth/me", s.auth(s.me))
+	mux.HandleFunc("GET /api/v1/profile", s.auth(s.profile))
+	mux.HandleFunc("PATCH /api/v1/profile", s.auth(s.profile))
+	mux.HandleFunc("POST /api/v1/profile/avatar", s.auth(s.uploadAvatar))
+	mux.HandleFunc("DELETE /api/v1/profile/avatar", s.auth(s.deleteAvatar))
 	mux.HandleFunc("GET /api/v1/users", s.requirePermission(s.users, "users.view"))
 	mux.HandleFunc("POST /api/v1/users", s.requirePermission(s.users, "users.create"))
 	mux.HandleFunc("GET /api/v1/users/{id}", s.requirePermission(s.userDetail, "users.view"))
@@ -111,6 +116,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/settings/line", s.requirePermission(s.lineSettings, "settings.line.update"))
 	mux.HandleFunc("POST /api/v1/settings/line/test", s.requirePermission(s.testLineNotification, "settings.line.test"))
 	mux.HandleFunc("GET /api/v1/notification-logs", s.requirePermission(s.notificationLogs, "notifications.view"))
+	_ = os.MkdirAll(s.cfg.UploadDir, 0755)
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.cfg.UploadDir))))
 	mux.HandleFunc("/", s.notFound)
 
 	return middleware.Chain(

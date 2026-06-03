@@ -25,6 +25,8 @@ export interface User {
   role: Role
   roles?: AssignedRole[]
   active: boolean
+  avatar_url: string
+  avatar_updated_at?: string
   createdAt: string
 }
 

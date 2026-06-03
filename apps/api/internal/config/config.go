@@ -10,6 +10,7 @@ type Config struct {
 	DatabaseURL string
 	CORSOrigins string
 	JWTSecret   string
+	UploadDir   string
 }
 
 func Load() Config {
@@ -21,6 +22,7 @@ func Load() Config {
 		DatabaseURL: env("DATABASE_URL", "grocery:password@tcp(127.0.0.1:3306)/grocery_pos?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci"),
 		CORSOrigins: env("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"),
 		JWTSecret:   env("JWT_SECRET", "dev-change-me"),
+		UploadDir:   env("UPLOAD_DIR", "storage/uploads"),
 	}
 }
 
