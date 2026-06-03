@@ -99,12 +99,21 @@
 }
 
 html.dark .bg-white,
+html.dark .bg-white\/65,
+html.dark .bg-white\/70,
+html.dark .bg-white\/75,
+html.dark .bg-white\/80,
+html.dark .bg-white\/85,
+html.dark .bg-white\/90,
 html.dark .bg-white\/95 {
   background-color: rgb(15 23 42 / 0.90);
 }
 
 html.dark .bg-slate-50,
-html.dark .bg-brand-50 {
+html.dark .bg-slate-50\/80,
+html.dark .bg-brand-50,
+html.dark .bg-brand-50\/60,
+html.dark .bg-brand-50\/80 {
   background-color: rgb(2 6 23);
 }
 
@@ -117,6 +126,7 @@ html.dark .bg-brand-100 {
 }
 
 html.dark .border-slate-200,
+html.dark .border-slate-300,
 html.dark .border-brand-100 {
   border-color: rgb(51 65 85);
 }
@@ -137,6 +147,8 @@ html.dark .text-brand-700 {
 }
 
 html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-50\/80:hover,
+html.dark .hover\:bg-slate-100:hover,
 html.dark .hover\:bg-brand-50:hover {
   background-color: rgb(30 41 59);
 }

@@ -95,24 +95,24 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocumentClick)
       <AppAvatar :src="auth.user?.avatar_url" :name="displayName" size="md" />
     </button>
     <div v-if="open" class="premium-surface absolute right-0 z-50 mt-3 w-[min(320px,calc(100vw-24px))] rounded-2xl border p-2 shadow-2xl">
-      <div class="flex items-center gap-3 border-b border-slate-100 p-3">
+      <div class="flex items-center gap-3 border-b border-slate-100 p-3 dark:border-slate-800">
         <AppAvatar :src="auth.user?.avatar_url" :name="displayName" size="md" />
         <div class="min-w-0">
           <p class="truncate text-base font-black">{{ displayName }}</p>
-          <p class="truncate text-sm text-slate-500">{{ roleLabel }}</p>
+          <p class="truncate text-sm text-slate-500 dark:text-slate-400">{{ roleLabel }}</p>
         </div>
       </div>
       <div class="grid gap-1 p-2">
-        <button class="flex min-h-11 items-center gap-3 rounded-xl px-3 text-left text-sm font-bold text-slate-700 hover:bg-brand-50" @click="showProfile">
+        <button class="flex min-h-11 items-center gap-3 rounded-xl px-3 text-left text-sm font-bold text-slate-700 hover:bg-brand-50 dark:text-slate-100 dark:hover:bg-slate-800" @click="showProfile">
           <AppIcon name="users" :size="18" />ดูโปรไฟล์
         </button>
-        <button class="flex min-h-11 items-center gap-3 rounded-xl px-3 text-left text-sm font-bold text-slate-700 hover:bg-brand-50" @click="chooseAvatar">
+        <button class="flex min-h-11 items-center gap-3 rounded-xl px-3 text-left text-sm font-bold text-slate-700 hover:bg-brand-50 dark:text-slate-100 dark:hover:bg-slate-800" @click="chooseAvatar">
           <AppIcon name="upload" :size="18" />อัปโหลดรูปโปรไฟล์
         </button>
-        <RouterLink v-if="auth.hasPermission('settings.view')" to="/settings" class="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-bold text-slate-700 hover:bg-brand-50" @click="open = false">
+        <RouterLink v-if="auth.hasPermission('settings.view')" to="/settings" class="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-bold text-slate-700 hover:bg-brand-50 dark:text-slate-100 dark:hover:bg-slate-800" @click="open = false">
           <AppIcon name="settings" :size="18" />ตั้งค่าบัญชี
         </RouterLink>
-        <button class="mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 text-left text-sm font-bold text-red-700 hover:bg-red-50" @click="logout">
+        <button class="mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 text-left text-sm font-bold text-red-700 hover:bg-red-50 dark:text-red-200 dark:hover:bg-red-500/15" @click="logout">
           <AppIcon name="log-out" :size="18" />ออกจากระบบ
         </button>
       </div>
@@ -120,35 +120,35 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocumentClick)
 
     <AppModal :open="profileOpen" title="ดูโปรไฟล์" @close="profileOpen = false">
       <div class="grid gap-5">
-        <div class="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-5 text-center">
+        <div class="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-5 text-center dark:border-slate-700 dark:bg-slate-950/60">
           <AppAvatar :src="auth.user?.avatar_url" :name="displayName" size="xl" />
           <div>
             <h2 class="text-xl font-black">{{ displayName }}</h2>
-            <p class="text-sm text-slate-500">{{ auth.user?.username }}</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">{{ auth.user?.username }}</p>
           </div>
           <div class="flex flex-wrap justify-center gap-2">
-            <span v-for="role in auth.roles" :key="role.code" class="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-bold text-brand-700">{{ role.name }}</span>
+            <span v-for="role in auth.roles" :key="role.code" class="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-bold text-brand-700 dark:bg-emerald-500/20 dark:text-emerald-100">{{ role.name }}</span>
           </div>
         </div>
 
         <dl class="grid gap-3 text-sm sm:grid-cols-2">
-          <div class="rounded-xl bg-white/70 p-3">
-            <dt class="text-slate-500">Account status</dt>
+          <div class="rounded-xl bg-white/70 p-3 dark:bg-slate-950/60">
+            <dt class="text-slate-500 dark:text-slate-400">Account status</dt>
             <dd class="font-bold">{{ auth.user?.active ? 'Active' : 'Disabled' }}</dd>
           </div>
-          <div class="rounded-xl bg-white/70 p-3">
-            <dt class="text-slate-500">Permissions</dt>
+          <div class="rounded-xl bg-white/70 p-3 dark:bg-slate-950/60">
+            <dt class="text-slate-500 dark:text-slate-400">Permissions</dt>
             <dd class="font-bold">{{ permissionsSummary }}</dd>
           </div>
-          <div class="rounded-xl bg-white/70 p-3 sm:col-span-2">
-            <dt class="text-slate-500">Avatar updated</dt>
+          <div class="rounded-xl bg-white/70 p-3 dark:bg-slate-950/60 sm:col-span-2">
+            <dt class="text-slate-500 dark:text-slate-400">Avatar updated</dt>
             <dd class="font-bold">{{ auth.user?.avatar_updated_at ? new Date(auth.user.avatar_updated_at).toLocaleString() : '-' }}</dd>
           </div>
         </dl>
 
-        <div class="rounded-2xl border border-slate-200 p-4">
+        <div class="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
           <p class="font-bold">อัปโหลดรูปโปรไฟล์</p>
-          <p class="mt-1 text-sm text-slate-500">รองรับ JPG, PNG, WEBP ขนาดไม่เกิน 2MB</p>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">รองรับ JPG, PNG, WEBP ขนาดไม่เกิน 2MB</p>
           <input ref="fileInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp" @change="uploadAvatar(($event.target as HTMLInputElement).files?.[0])" />
           <div class="mt-4 flex flex-wrap gap-2">
             <AppButton variant="secondary" icon="upload" :loading="uploading" @click="fileInput?.click()">เลือกรูปโปรไฟล์</AppButton>

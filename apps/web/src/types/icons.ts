@@ -8,6 +8,7 @@ export type IconName =
   | 'map-pin'
   | 'arrow-left-right'
   | 'receipt-text'
+  | 'purchase-order'
   | 'bell'
   | 'chart-column'
   | 'download'

@@ -21,13 +21,42 @@ withDefaults(defineProps<{ name: IconName; size?: number; strokeWidth?: number }
   >
     <template v-if="name === 'layout-dashboard'"><rect x="3" y="3" width="7" height="9" rx="1" /><rect x="14" y="3" width="7" height="5" rx="1" /><rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" /></template>
     <template v-else-if="name === 'shopping-cart'"><circle cx="8" cy="21" r="1" /><circle cx="19" cy="21" r="1" /><path d="M2 3h3l3 13h11l2-9H7" /></template>
-    <template v-else-if="name === 'package'"><path d="m7.5 4.3 4.5 2.6 4.5-2.6" /><path d="M21 8.5v7l-9 5-9-5v-7l9-5 9 5Z" /><path d="M12 22V12" /></template>
-    <template v-else-if="name === 'tags'"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13.2V3h10.2l7.4 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r=".5" /></template>
-    <template v-else-if="name === 'package-plus'"><path d="M12 22V12" /><path d="m7.5 4.3 4.5 2.6 4.5-2.6" /><path d="M21 12.5v3l-9 5-9-5v-7l9-5 5 2.8" /><path d="M19 3v6" /><path d="M16 6h6" /></template>
+    <template v-else-if="name === 'package'">
+      <path d="M4 7.5 12 3l8 4.5-8 4.5L4 7.5Z" />
+      <path d="M4 7.5v9L12 21l8-4.5v-9" />
+      <path d="M12 12v9" />
+      <path d="m8 5.25 8 4.5" />
+    </template>
+    <template v-else-if="name === 'tags'">
+      <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13.2V3h10.2l7.4 7.6a2 2 0 0 1 0 2.8Z" />
+      <circle cx="7.5" cy="7.5" r=".5" />
+    </template>
+    <template v-else-if="name === 'package-plus'">
+      <path d="M4 7.5 12 3l8 4.5-8 4.5L4 7.5Z" />
+      <path d="M4 7.5v9L12 21l4-2.25" />
+      <path d="M12 12v9" />
+      <path d="m8 5.25 8 4.5" />
+      <path d="M19 14v6" />
+      <path d="M16 17h6" />
+    </template>
     <template v-else-if="name === 'history'"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /><path d="M12 7v5l3 2" /></template>
     <template v-else-if="name === 'map-pin'"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="3" /></template>
     <template v-else-if="name === 'arrow-left-right'"><path d="M8 7h13" /><path d="m18 4 3 3-3 3" /><path d="M16 17H3" /><path d="m6 14-3 3 3 3" /></template>
-    <template v-else-if="name === 'receipt-text'"><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2V2Z" /><path d="M8 7h8" /><path d="M8 11h8" /><path d="M8 15h5" /></template>
+    <template v-else-if="name === 'receipt-text'">
+      <path d="M6 3h12v18l-2-1.25L14 21l-2-1.25L10 21l-2-1.25L6 21V3Z" />
+      <path d="M9 8h6" />
+      <path d="M9 12h6" />
+      <path d="M9 16h3.5" />
+    </template>
+    <template v-else-if="name === 'purchase-order'">
+      <path d="M9 4h6" />
+      <path d="M9 4a3 3 0 0 1 6 0" />
+      <path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <path d="M8 11h.01" />
+      <path d="M11 11h5" />
+      <path d="M8 15h.01" />
+      <path d="M11 15h5" />
+    </template>
     <template v-else-if="name === 'bell'"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></template>
     <template v-else-if="name === 'chart-column'"><path d="M4 20h16" /><path d="M6 16V8" /><path d="M12 16V4" /><path d="M18 16v-6" /></template>
     <template v-else-if="name === 'download'"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M4 21h16" /></template>
