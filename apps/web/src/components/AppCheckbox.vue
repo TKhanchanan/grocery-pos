@@ -4,7 +4,7 @@ defineEmits<{ 'update:modelValue': [value: boolean] }>()
 </script>
 
 <template>
-  <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white/70 p-3 text-sm shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950/60 dark:hover:bg-slate-800">
+  <label class="flex items-start gap-3 rounded-xl bg-white/75 p-3 text-sm shadow-sm transition hover:bg-brand-50 dark:bg-slate-950/60 dark:hover:bg-teal-400/10">
     <input
       class="focus-ring mt-1 h-4 w-4 rounded border-slate-300 text-brand-600"
       type="checkbox"

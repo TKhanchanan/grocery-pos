@@ -90,12 +90,12 @@ watch(() => route.path, () => {
 
 <template>
   <div class="min-h-screen lg:grid" :class="app.sidebarCollapsed ? 'lg:grid-cols-[88px_1fr]' : 'lg:grid-cols-[292px_1fr]'">
-    <aside class="hidden border-r border-slate-200 bg-white/80 backdrop-blur-xl transition-[width] dark:border-slate-800 dark:bg-slate-950/80 lg:block">
+    <aside class="hidden bg-white/80 shadow-xl shadow-teal-950/5 backdrop-blur-xl transition-[width] dark:bg-slate-950/80 dark:shadow-black/25 lg:block">
       <div class="sticky top-0 flex h-screen flex-col">
-        <div class="border-b border-slate-200 p-4 dark:border-slate-800">
+        <div class="p-4">
           <div v-if="!app.sidebarCollapsed" class="flex min-h-12 items-center justify-between gap-3">
             <div class="flex min-w-0 flex-1 items-center gap-3">
-              <div class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-600 text-white shadow-lg shadow-brand-600/20">
+              <div class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/20">
                 <AppIcon name="shopping-cart" />
               </div>
               <div class="min-w-0">
@@ -103,29 +103,25 @@ watch(() => route.path, () => {
                 <h1 class="truncate text-base font-black">{{ app.t('app.subtitle') }}</h1>
               </div>
             </div>
-            <button class="focus-ring grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white/80 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="ย่อเมนู" @click="app.toggleSidebarCollapsed">
+            <button class="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="ย่อเมนู" @click="app.toggleSidebarCollapsed">
               <AppIcon name="panel-left" :size="18" />
             </button>
           </div>
           <div v-else class="grid min-h-12 place-items-center">
-            <button class="focus-ring grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white/80 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="ขยายเมนู" @click="app.toggleSidebarCollapsed">
+            <button class="grid h-10 w-10 place-items-center rounded-xl text-slate-500 hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="ขยายเมนู" @click="app.toggleSidebarCollapsed">
               <AppIcon name="panel-left" :size="18" />
             </button>
           </div>
         </div>
         <nav class="flex-1 overflow-y-auto p-3" :class="app.sidebarCollapsed ? 'px-2' : ''">
-          <RouterLink
-            v-for="item in visibleNavItems"
-            :key="item.to"
-            :to="item.to"
-            class="group relative mb-1 flex min-h-11 items-center gap-3 rounded-2xl px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-emerald-200"
+          <RouterLink v-for="item in visibleNavItems" :key="item.to" :to="item.to"
+            class="group relative mb-1 flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:text-slate-300 dark:hover:bg-teal-400/10 dark:hover:text-teal-100"
             :class="[
-              { 'bg-brand-600 text-white shadow-lg shadow-brand-600/20 hover:bg-brand-600 hover:text-white dark:bg-emerald-500 dark:!text-slate-950 dark:hover:bg-emerald-400 dark:hover:!text-slate-950': isActive(item.to) },
+              isActive(item.to)
+                ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20 hover:!bg-brand-600 hover:!text-white dark:bg-teal-300 dark:!text-slate-950 dark:hover:!bg-teal-300 dark:hover:!text-slate-950'
+                : '',
               app.sidebarCollapsed ? 'justify-center px-2' : '',
-            ]"
-            :title="app.t(item.labelKey)"
-            :aria-label="app.sidebarCollapsed ? app.t(item.labelKey) : undefined"
-          >
+            ]" :title="app.t(item.labelKey)" :aria-label="app.sidebarCollapsed ? app.t(item.labelKey) : undefined">
             <AppIcon v-if="item.icon" :name="item.icon" :size="20" />
             <span :class="app.sidebarCollapsed ? 'sr-only' : 'truncate'">{{ app.t(item.labelKey) }}</span>
             <span v-if="item.to === '/alerts' && app.alertCount" :class="app.sidebarCollapsed ? 'absolute right-1 top-1' : 'ml-auto'">
@@ -137,8 +133,8 @@ watch(() => route.path, () => {
     </aside>
 
     <AppDrawer :open="app.sidebarOpen" @close="app.closeSidebar">
-      <div class="mb-4 flex items-center gap-3 rounded-2xl bg-brand-50 p-3 dark:bg-slate-900">
-        <div class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-600 text-white shadow-lg shadow-brand-600/20">
+      <div class="mb-4 flex items-center gap-3 rounded-xl bg-brand-50 p-3 shadow-sm dark:bg-slate-900">
+        <div class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/20">
           <AppIcon name="shopping-cart" />
         </div>
         <div class="min-w-0">
@@ -151,8 +147,8 @@ watch(() => route.path, () => {
           v-for="item in visibleNavItems"
           :key="item.to"
           :to="item.to"
-          class="rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-slate-800"
-          :class="{ 'bg-brand-600 text-white dark:bg-emerald-500 dark:!text-slate-950': isActive(item.to) }"
+          class="rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-teal-400/10"
+          :class="{ 'bg-brand-600 text-white dark:bg-teal-300 dark:!text-slate-950': isActive(item.to) }"
           @click="app.closeSidebar"
         >
           <span class="flex items-center justify-start gap-3">
@@ -165,16 +161,16 @@ watch(() => route.path, () => {
     </AppDrawer>
 
     <div class="min-w-0">
-      <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/75 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/75">
+      <header class="sticky top-0 z-20 bg-white/75 shadow-sm backdrop-blur-xl dark:bg-slate-950/75">
         <div class="flex min-h-16 items-center justify-between gap-2 px-3 sm:gap-3 sm:px-4 lg:px-6">
-          <button class="focus-ring shrink-0 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm font-bold dark:border-slate-700 dark:bg-slate-900/80 lg:hidden" @click="app.openSidebar">
+          <button class="shrink-0 rounded-xl px-3 py-2 text-sm font-bold dark:bg-slate-900/80 lg:hidden" @click="app.openSidebar">
             <AppIcon name="menu" :size="20" />
           </button>
           <div class="hidden min-w-0 sm:block"></div>
           <div ref="topbarControls" class="flex min-w-0 items-center gap-2 sm:gap-2">
             <div class="relative hidden md:block">
               <button
-                class="focus-ring inline-flex min-h-10 min-w-11 items-center justify-center rounded-xl border border-slate-200 bg-white/80 px-3 text-sm font-black text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:border-emerald-400/50 dark:hover:bg-slate-800"
+                class="inline-flex min-h-10 min-w-11 items-center justify-center rounded-xl px-3 text-sm font-black text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10"
                 aria-label="ปรับขนาดตัวอักษร"
                 @click="textSizeOpen = !textSizeOpen; languageOpen = false"
               >
@@ -195,7 +191,7 @@ watch(() => route.path, () => {
             </div>
             <div class="relative hidden sm:block">
               <button
-                class="focus-ring inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:border-emerald-400/50 dark:hover:bg-slate-800"
+                class="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-bold text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10"
                 aria-label="เลือกภาษา"
                 @click="languageOpen = !languageOpen; textSizeOpen = false"
               >
@@ -214,11 +210,11 @@ watch(() => route.path, () => {
                 </button>
               </div>
             </div>
-            <RouterLink to="/alerts" class="focus-ring relative grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white/80 text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:border-emerald-400/50 dark:hover:bg-slate-800" aria-label="Alerts" @click="languageOpen = false; textSizeOpen = false">
+            <RouterLink to="/alerts" class="relative grid h-10 w-10 place-items-center rounded-xl text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10" aria-label="Alerts" @click="languageOpen = false; textSizeOpen = false">
               <AppIcon name="bell" :size="20" />
               <AppBadge v-if="app.alertCount" class="absolute -right-2 -top-2">{{ app.alertCount }}</AppBadge>
             </RouterLink>
-            <button class="focus-ring grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white/80 text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:border-emerald-400/50 dark:hover:bg-slate-800" aria-label="Toggle theme" @click="languageOpen = false; textSizeOpen = false; app.toggleTheme()">
+            <button class="grid h-10 w-10 place-items-center rounded-xl text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10" aria-label="Toggle theme" @click="languageOpen = false; textSizeOpen = false; app.toggleTheme()">
               <AppIcon :name="app.isDark ? 'sun' : 'moon'" :size="20" />
             </button>
             <ProfileDropdown />
