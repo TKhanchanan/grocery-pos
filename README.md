@@ -96,12 +96,13 @@ Latest verification:
 
 ## Migration Notes
 
-Fresh Docker initialization runs `001_init.sql`, demo seed data, then `011_dynamic_rbac.sql`.
+Fresh Docker initialization runs `001_init.sql`, demo seed data, then compatibility migrations including RBAC, profile avatars, and product images.
 
 For an existing database, apply:
 
 ```bash
-mysql -u grocery -p grocery_pos < apps/api/migrations/011_dynamic_rbac.sql
+cd apps/api
+go run ./cmd/migrate
 ```
 
-The migration keeps the legacy `users.role` column for compatibility while adding `roles`, `permissions`, `role_permissions`, `user_roles`, and `audit_logs`.
+The migrations keep the legacy `users.role` column for compatibility while adding dynamic RBAC tables, profile avatar fields, and product image fields.

@@ -59,7 +59,7 @@ function setQuantity(productId: number, quantity: number) {
 </script>
 
 <template>
-  <AppCard class="h-full overflow-hidden">
+  <AppCard class="h-full overflow-hidden dark:bg-slate-900/80">
     <div class="flex items-center justify-between gap-3">
       <div>
         <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('pos.payment') }}</p>
@@ -129,8 +129,8 @@ function setQuantity(productId: number, quantity: number) {
           <button
             v-for="method in paymentMethods"
             :key="method.value"
-            class="focus-ring flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition"
-            :class="cart.paymentMethod === method.value ? 'border-brand-600 bg-brand-600 text-white dark:border-emerald-400 dark:bg-emerald-500 dark:text-slate-950' : 'border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-200 dark:hover:bg-slate-800'"
+            class="flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition"
+            :class="cart.paymentMethod === method.value ? 'border-brand-600 bg-brand-600 text-white dark:bg-teal-300 dark:text-slate-950' : 'border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-brand-600 dark:text-slate-200 dark:hover:bg-slate-800'"
             @click="cart.setPaymentMethod(method.value)"
           >
             <AppIcon :name="method.icon" :size="18" />

@@ -43,15 +43,71 @@ type StockTransfer struct {
 	Items            []StockTransferItem `json:"items"`
 }
 
+type StockTransferPage struct {
+	Items    []StockTransfer `json:"items"`
+	Total    int             `json:"total"`
+	Page     int             `json:"page"`
+	PageSize int             `json:"page_size"`
+}
+
+type StockTransferOptions struct {
+	Products  []Product      `json:"products"`
+	Locations []Location     `json:"locations"`
+	Stocks    []ProductStock `json:"stocks"`
+}
+
+func (s *Server) stockTransferOptions(w http.ResponseWriter, r *http.Request) {
+	products, err := s.listProducts(r.Context(), r)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load products.")
+		return
+	}
+	locationRows, err := s.db.QueryContext(r.Context(), `SELECT id, name, description, active, created_at FROM locations ORDER BY name`)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load locations.")
+		return
+	}
+	defer locationRows.Close()
+	locations := []Location{}
+	for locationRows.Next() {
+		var item Location
+		if err := locationRows.Scan(&item.ID, &item.Name, &item.Description, &item.Active, &item.CreatedAt); err != nil {
+			response.ErrorJSON(w, http.StatusInternalServerError, "SCAN_FAILED", "Could not read locations.")
+			return
+		}
+		locations = append(locations, item)
+	}
+	stocks, err := s.queryProductStocks(r.Context(), nil)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load product stocks.")
+		return
+	}
+	response.JSON(w, http.StatusOK, StockTransferOptions{
+		Products:  products,
+		Locations: locations,
+		Stocks:    stocks,
+	})
+}
+
 func (s *Server) stockTransfers(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		transfers, err := s.listStockTransfers(r.Context())
+		page := positiveQueryInt(r, "page", 1)
+		pageSize := positiveQueryInt(r, "page_size", 20)
+		if pageSize != 10 && pageSize != 20 && pageSize != 50 {
+			pageSize = 20
+		}
+		transfers, total, err := s.listStockTransfers(r.Context(), page, pageSize)
 		if err != nil {
 			response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load stock transfers.")
 			return
 		}
-		response.JSON(w, http.StatusOK, transfers)
+		response.JSON(w, http.StatusOK, StockTransferPage{
+			Items:    transfers,
+			Total:    total,
+			Page:     page,
+			PageSize: pageSize,
+		})
 	case http.MethodPost:
 		var body StockTransferInput
 		if err := readJSON(r, &body); err != nil {
@@ -113,7 +169,12 @@ func (s *Server) cancelStockTransfer(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, transfer)
 }
 
-func (s *Server) listStockTransfers(ctx context.Context) ([]StockTransfer, error) {
+func (s *Server) listStockTransfers(ctx context.Context, page, pageSize int) ([]StockTransfer, int, error) {
+	var total int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM stock_transfers`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * pageSize
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT st.id, st.transfer_no, st.from_location_id, fl.name, st.to_location_id, tl.name,
 		       st.status, st.note, st.created_by, st.completed_at, st.cancelled_at, st.created_at
@@ -121,21 +182,21 @@ func (s *Server) listStockTransfers(ctx context.Context) ([]StockTransfer, error
 		JOIN locations fl ON fl.id=st.from_location_id
 		JOIN locations tl ON tl.id=st.to_location_id
 		ORDER BY st.id DESC
-		LIMIT 200`)
+		LIMIT ? OFFSET ?`, pageSize, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	transfers := []StockTransfer{}
 	for rows.Next() {
 		transfer, err := scanStockTransfer(rows)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		transfer.Items, _ = s.stockTransferItems(ctx, transfer.ID)
 		transfers = append(transfers, transfer)
 	}
-	return transfers, rows.Err()
+	return transfers, total, rows.Err()
 }
 
 func (s *Server) createStockTransfer(ctx context.Context, user User, body StockTransferInput) (StockTransfer, error) {
@@ -158,6 +219,13 @@ func (s *Server) createStockTransfer(ctx context.Context, user User, body StockT
 		for _, item := range body.Items {
 			if item.Quantity <= 0 {
 				return errors.New("transfer item quantity must be greater than 0")
+			}
+			sourceBefore, err := lockedStock(ctx, tx, item.ProductID, body.FromLocationID)
+			if err != nil {
+				return err
+			}
+			if sourceBefore < item.Quantity {
+				return errors.New("insufficient source stock")
 			}
 			if _, err := tx.ExecContext(ctx, `INSERT INTO stock_transfer_items(transfer_id, product_id, quantity) VALUES (?, ?, ?)`, transferID, item.ProductID, item.Quantity); err != nil {
 				return err

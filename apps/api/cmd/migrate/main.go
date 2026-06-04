@@ -15,7 +15,7 @@ func main() {
 	}
 	defer db.Close()
 
-	for _, migration := range []string{"011_dynamic_rbac.sql", "012_profile_avatar.sql"} {
+	for _, migration := range []string{"011_dynamic_rbac.sql", "012_profile_avatar.sql", "013_product_images.sql"} {
 		if err := database.ApplyFirstExistingSQLFile(db, "migrations/"+migration, "apps/api/migrations/"+migration); err != nil {
 			log.Fatalf("%s migration failed: %v", migration, err)
 		}

@@ -6,6 +6,7 @@ export interface NavigationItem {
   to: string
   roles?: Role[]
   permission?: PermissionCode
+  permissions?: PermissionCode[]
   icon?: IconName
 }
 
@@ -102,6 +103,8 @@ export interface Product {
   threshold: number
   reorder_point: number
   is_active: boolean
+  image_url: string | null
+  image_updated_at: string | null
   total_stock: number
   stock_status: StockStatus
   stocks?: ProductStock[]
@@ -113,6 +116,8 @@ export interface StockMovement {
   product_id: number
   product_name: string
   sku: string
+  image_url: string | null
+  image_updated_at: string | null
   location_id: number
   location_name: string
   reference_type: 'RESTOCK' | 'ADJUSTMENT' | string
@@ -158,6 +163,8 @@ export interface POSProduct {
   sku: string
   name: string
   barcode: string | null
+  image_url: string | null
+  image_updated_at: string | null
   selling_price: number
   unit_cost: number
   unit: string
@@ -237,6 +244,8 @@ export interface ProductSalesReport {
   product_id: number
   product_name: string
   sku: string
+  image_url: string | null
+  image_updated_at: string | null
   quantity: number
   revenue: number
   cost: number
@@ -247,6 +256,8 @@ export interface StockReport {
   product_id: number
   product_name: string
   sku: string
+  image_url: string | null
+  image_updated_at: string | null
   location_id: number
   location_name: string
   quantity: number
@@ -331,6 +342,8 @@ export interface PurchaseOrderItem {
   product_id: number
   product_name?: string
   sku?: string
+  image_url?: string | null
+  image_updated_at?: string | null
   quantity: number
   received_quantity: number
   unit_cost: number

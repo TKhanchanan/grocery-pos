@@ -1,0 +1,455 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { apiClient, postJSON } from '../api/client'
+import AppBadge from '../components/AppBadge.vue'
+import AppButton from '../components/AppButton.vue'
+import AppCard from '../components/AppCard.vue'
+import AppEmptyState from '../components/AppEmptyState.vue'
+import AppInput from '../components/AppInput.vue'
+import AppLoadingState from '../components/AppLoadingState.vue'
+import AppModal from '../components/AppModal.vue'
+import AppSelect from '../components/AppSelect.vue'
+import AppTabs from '../components/AppTabs.vue'
+import AppTextarea from '../components/AppTextarea.vue'
+import PageHeader from '../components/PageHeader.vue'
+import ProductAvatar from '../components/ProductAvatar.vue'
+import type { TranslationKey } from '../i18n'
+import { useAppStore } from '../stores/app'
+import { useAuthStore } from '../stores/auth'
+import type { Location, Product, ProductStock, StockMovement } from '../types/navigation'
+
+type StockTab = 'restock' | 'movements'
+
+interface StockMovementPage {
+  items: StockMovement[]
+  total: number
+  page: number
+  page_size: number
+}
+
+interface StockOperationOptions {
+  products: Product[]
+  locations: Location[]
+  stocks: ProductStock[]
+}
+
+const app = useAppStore()
+const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+
+const products = ref<Product[]>([])
+const locations = ref<Location[]>([])
+const stocks = ref<ProductStock[]>([])
+const movements = ref<StockMovement[]>([])
+const latestMovement = ref<StockMovement | null>(null)
+const loadingData = ref(false)
+const loadingMovements = ref(false)
+const submitting = ref(false)
+const adjustSubmitting = ref(false)
+const error = ref('')
+const movementError = ref('')
+const adjustOpen = ref(false)
+const activeTab = ref<StockTab>('restock')
+const page = ref(1)
+const pageSize = ref(20)
+const totalMovements = ref(0)
+
+const form = reactive({
+  product_id: '',
+  location_id: '',
+  quantity: 100,
+  total_cost: 200,
+  unit_cost: 0,
+  note: '',
+})
+
+const adjustment = reactive({
+  quantity: -1,
+  note: '',
+})
+
+const canRestock = computed(() => auth.hasPermission('stock.restock'))
+const canAdjust = computed(() => auth.hasPermission('stock.adjust'))
+const canViewMovements = computed(() => auth.hasPermission('stock.movements.view'))
+const canUseRestockTab = computed(() => canRestock.value || canAdjust.value)
+const tabs = computed(() => {
+  const items: Array<{ key: StockTab; label: string }> = []
+  if (canUseRestockTab.value) items.push({ key: 'restock', label: app.t('stockOps.tab.restock') })
+  if (canViewMovements.value) items.push({ key: 'movements', label: app.t('stockOps.tab.history') })
+  return items
+})
+const selectedProduct = computed(() => products.value.find((product) => product.id === Number(form.product_id)) ?? null)
+const selectedLocation = computed(() => locations.value.find((location) => location.id === Number(form.location_id)) ?? null)
+const currentStock = computed(() => stocks.value.find((stock) => stock.product_id === Number(form.product_id) && stock.location_id === Number(form.location_id))?.quantity ?? 0)
+const unitCostPreview = computed(() => form.total_cost > 0 && form.quantity > 0 ? Number(form.total_cost) / Number(form.quantity) : Number(form.unit_cost || 0))
+const afterRestockPreview = computed(() => currentStock.value + Number(form.quantity || 0))
+const afterAdjustmentPreview = computed(() => currentStock.value + Number(adjustment.quantity || 0))
+const totalPages = computed(() => Math.max(1, Math.ceil(totalMovements.value / pageSize.value)))
+const locale = computed(() => app.language === 'th' ? 'th-TH' : 'en-US')
+
+function t(key: TranslationKey, params: Record<string, string | number> = {}) {
+  let text = String(app.t(key))
+  for (const [name, value] of Object.entries(params)) text = text.replaceAll(`{${name}}`, String(value))
+  return text
+}
+
+function money(value: number) {
+  const amount = value.toLocaleString(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return t('stockOps.baht', { amount })
+}
+
+function stockLine(quantity: number) {
+  return t('stockOps.stockLine', { quantity, unit: selectedProduct.value?.unit ?? '' })
+}
+
+function signed(value: number) {
+  return value > 0 ? `+${value}` : String(value)
+}
+
+function movementProduct(movement: StockMovement) {
+  return products.value.find((product) => product.id === movement.product_id) ?? null
+}
+
+function movementImageURL(movement: StockMovement) {
+  return movement.image_url ?? movementProduct(movement)?.image_url ?? null
+}
+
+function movementImageUpdatedAt(movement: StockMovement) {
+  return movement.image_updated_at ?? movementProduct(movement)?.image_updated_at ?? null
+}
+
+function movementTone(type: string) {
+  if (type.includes('SALE') || type.includes('OUT')) return 'danger'
+  if (type.includes('RESTOCK') || type.includes('IN') || type.includes('RECEIVE')) return 'success'
+  return 'info'
+}
+
+function friendlyError(err: unknown, fallback: TranslationKey) {
+  const message = err instanceof Error ? err.message : app.t(fallback)
+  if (message.toLowerCase().includes('permission')) return app.t('stockOps.noPermission')
+  return message
+}
+
+function syncActiveTabFromRoute() {
+  const requested = route.query.tab === 'movements' ? 'movements' : 'restock'
+  if (requested === 'movements' && canViewMovements.value) activeTab.value = 'movements'
+  else if (requested === 'restock' && canUseRestockTab.value) activeTab.value = 'restock'
+  else activeTab.value = tabs.value[0]?.key ?? 'restock'
+}
+
+function setActiveTab(tab: StockTab) {
+  activeTab.value = tab
+  router.replace({ path: '/stock-operations', query: { ...route.query, tab } })
+  if (tab === 'movements') loadMovements()
+}
+
+async function loadData() {
+  if (!canUseRestockTab.value) return
+  loadingData.value = true
+  error.value = ''
+  try {
+    const options = await apiClient<StockOperationOptions>('/v1/stock-operations/options')
+    products.value = options.products.filter((product) => product.is_active)
+    locations.value = options.locations.filter((location) => location.is_active)
+    stocks.value = options.stocks
+    if (!form.product_id && products.value[0]) form.product_id = String(products.value[0].id)
+    if (!form.location_id && locations.value[0]) form.location_id = String(locations.value[0].id)
+  } catch (err) {
+    error.value = friendlyError(err, 'stockOps.loadFailed')
+  } finally {
+    loadingData.value = false
+  }
+}
+
+async function loadMovements() {
+  if (!canViewMovements.value) return
+  loadingMovements.value = true
+  movementError.value = ''
+  try {
+    const params = new URLSearchParams({ page: String(page.value), page_size: String(pageSize.value) })
+    const result = await apiClient<StockMovementPage>(`/v1/stock-movements?${params.toString()}`)
+    movements.value = result.items
+    totalMovements.value = result.total
+    page.value = result.page
+    pageSize.value = result.page_size
+  } catch (err) {
+    movementError.value = friendlyError(err, 'stockOps.historyFailed')
+  } finally {
+    loadingMovements.value = false
+  }
+}
+
+function validateRestock() {
+  if (Number(form.quantity) <= 0) return app.t('stockOps.quantityRequired')
+  if (Number(form.total_cost || 0) < 0 || Number(form.unit_cost || 0) < 0) return app.t('stockOps.costRequired')
+  if (Number(form.total_cost || 0) === 0 && Number(form.unit_cost || 0) === 0) return app.t('stockOps.costRequired')
+  return ''
+}
+
+async function restock() {
+  const validation = validateRestock()
+  if (validation) {
+    error.value = validation
+    return
+  }
+  submitting.value = true
+  error.value = ''
+  latestMovement.value = null
+  try {
+    latestMovement.value = await postJSON<StockMovement>(`/v1/products/${form.product_id}/restock`, {
+      location_id: Number(form.location_id),
+      quantity: Number(form.quantity),
+      total_cost: form.total_cost ? Number(form.total_cost) : null,
+      unit_cost: Number(unitCostPreview.value),
+      note: form.note,
+    })
+    app.pushToast({ type: 'success', message: app.t('stockOps.restockSuccess'), description: selectedProduct.value?.name })
+    await loadData()
+    if (canViewMovements.value) {
+      page.value = 1
+      await loadMovements()
+    }
+  } catch (err) {
+    error.value = friendlyError(err, 'stockOps.restockFailed')
+    app.pushToast({ type: 'error', message: app.t('stockOps.restockFailed'), description: error.value })
+  } finally {
+    submitting.value = false
+  }
+}
+
+function openAdjust() {
+  adjustment.quantity = -1
+  adjustment.note = ''
+  adjustOpen.value = true
+}
+
+async function adjustStock() {
+  if (Number(adjustment.quantity) === 0) {
+    error.value = app.t('stockOps.adjustQuantityRequired')
+    return
+  }
+  if (!adjustment.note.trim()) {
+    error.value = app.t('stockOps.noteRequired')
+    return
+  }
+  adjustSubmitting.value = true
+  error.value = ''
+  try {
+    latestMovement.value = await postJSON<StockMovement>(`/v1/products/${form.product_id}/adjust-stock`, {
+      location_id: Number(form.location_id),
+      quantity: Number(adjustment.quantity),
+      note: adjustment.note.trim(),
+    })
+    app.pushToast({ type: 'success', message: app.t('stockOps.adjustSuccess'), description: selectedProduct.value?.name })
+    adjustOpen.value = false
+    await loadData()
+    if (canViewMovements.value) {
+      page.value = 1
+      await loadMovements()
+    }
+  } catch (err) {
+    error.value = friendlyError(err, 'stockOps.adjustFailed')
+    app.pushToast({ type: 'error', message: app.t('stockOps.adjustFailed'), description: error.value })
+  } finally {
+    adjustSubmitting.value = false
+  }
+}
+
+function changePageSize(value: string) {
+  pageSize.value = Number(value)
+  page.value = 1
+  loadMovements()
+}
+
+function nextPage() {
+  if (page.value >= totalPages.value) return
+  page.value += 1
+  loadMovements()
+}
+
+function previousPage() {
+  if (page.value <= 1) return
+  page.value -= 1
+  loadMovements()
+}
+
+watch(() => route.query.tab, syncActiveTabFromRoute)
+
+onMounted(async () => {
+  syncActiveTabFromRoute()
+  await loadData()
+  if (canViewMovements.value) await loadMovements()
+})
+</script>
+
+<template>
+  <section>
+    <PageHeader :title="app.t('stockOps.title')" :eyebrow="app.t('stockOps.eyebrow')" :description="app.t('stockOps.description')" icon="package-plus" />
+
+    <div class="grid gap-4">
+      <AppTabs v-if="tabs.length > 1" :tabs="tabs" :model-value="activeTab" @update:model-value="setActiveTab" />
+
+      <div v-if="activeTab === 'restock' && canUseRestockTab" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <AppCard class="dark:bg-slate-900/80">
+          <AppLoadingState v-if="loadingData" :label="app.t('stockOps.loadingData')" />
+          <form v-else class="grid gap-4" @submit.prevent="restock">
+            <div class="grid gap-3 md:grid-cols-2">
+              <AppSelect v-model="form.product_id" :label="app.t('stockOps.product')">
+                <option v-for="product in products" :key="product.id" :value="String(product.id)">{{ product.name }} · {{ product.sku }}</option>
+              </AppSelect>
+              <AppSelect v-model="form.location_id" :label="app.t('stockOps.location')">
+                <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
+              </AppSelect>
+              <AppInput v-model="form.quantity" :label="app.t('stockOps.quantity')" type="number" />
+              <AppInput v-model="form.total_cost" :label="app.t('stockOps.totalCost')" type="number" />
+              <AppInput v-model="form.unit_cost" :label="app.t('stockOps.unitCostFallback')" type="number" />
+              <AppTextarea v-model="form.note" :label="app.t('stockOps.note')" />
+            </div>
+
+            <div class="grid gap-3 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/50 md:hidden">
+              <h2 class="font-black">{{ app.t('stockOps.stockPreview') }}</h2>
+              <div class="grid grid-cols-3 gap-2 text-sm">
+                <div><p class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.currentStock') }}</p><p class="font-black">{{ stockLine(currentStock) }}</p></div>
+                <div><p class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.afterRestock') }}</p><p class="font-black">{{ stockLine(afterRestockPreview) }}</p></div>
+                <div><p class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.unitCost') }}</p><p class="font-black">{{ money(unitCostPreview) }}</p></div>
+              </div>
+            </div>
+
+            <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ error }}</div>
+            <div class="flex flex-wrap gap-2">
+              <AppButton v-if="canRestock" type="submit" :loading="submitting" :disabled="submitting" icon="package-plus">{{ app.t('stockOps.submitRestock') }}</AppButton>
+              <AppButton v-if="canAdjust" type="button" variant="secondary" icon="settings" @click="openAdjust">{{ app.t('stockOps.adjustStock') }}</AppButton>
+            </div>
+          </form>
+        </AppCard>
+
+        <div class="grid gap-4">
+          <AppCard class="hidden dark:bg-slate-900/80 md:block">
+            <h2 class="font-black">{{ app.t('stockOps.stockPreview') }}</h2>
+            <div class="mt-4 flex min-w-0 items-center gap-3">
+              <ProductAvatar :src="selectedProduct?.image_url" :updated-at="selectedProduct?.image_updated_at" :name="selectedProduct?.name" size="lg" shape="square" />
+              <div class="min-w-0">
+                <p class="truncate font-black">{{ selectedProduct?.name ?? '-' }}</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ selectedProduct?.sku ?? '-' }} · {{ selectedLocation?.name ?? '-' }}</p>
+              </div>
+            </div>
+            <dl class="mt-4 grid gap-3">
+              <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-950/60"><dt class="text-sm text-slate-500 dark:text-slate-400">{{ app.t('stockOps.currentStock') }}</dt><dd class="text-xl font-black">{{ stockLine(currentStock) }}</dd></div>
+              <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-950/60"><dt class="text-sm text-slate-500 dark:text-slate-400">{{ app.t('stockOps.afterRestock') }}</dt><dd class="text-xl font-black text-brand-700 dark:text-emerald-200">{{ stockLine(afterRestockPreview) }}</dd></div>
+              <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-950/60"><dt class="text-sm text-slate-500 dark:text-slate-400">{{ app.t('stockOps.unitCost') }}</dt><dd class="text-xl font-black">{{ money(unitCostPreview) }}</dd></div>
+            </dl>
+          </AppCard>
+
+          <AppCard v-if="latestMovement" class="dark:bg-slate-900/80">
+            <h2 class="font-black">{{ app.t('stockOps.latestMovement') }}</h2>
+            <dl class="mt-3 grid grid-cols-3 gap-3 text-sm">
+              <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.type') }}</dt><dd class="font-black">{{ latestMovement.reference_type }}</dd></div>
+              <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.before') }}</dt><dd class="font-black">{{ latestMovement.before_stock }}</dd></div>
+              <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.after') }}</dt><dd class="font-black">{{ latestMovement.after_stock }}</dd></div>
+            </dl>
+          </AppCard>
+        </div>
+      </div>
+
+      <AppCard v-if="activeTab === 'movements' && canViewMovements" class="dark:bg-slate-900/80">
+        <div v-if="movementError" class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ movementError }}</div>
+        <AppLoadingState v-if="loadingMovements" :label="app.t('stockOps.loadingHistory')" />
+        <AppEmptyState v-else-if="movements.length === 0" :title="app.t('stockOps.noHistory')" :description="app.t('stockOps.noHistoryDescription')" />
+        <div v-else>
+          <div class="hidden overflow-x-auto md:block">
+            <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+              <thead class="bg-slate-50 dark:bg-slate-950/70">
+                <tr>
+                  <th class="px-3 py-3 text-left">{{ app.t('stockOps.time') }}</th>
+                  <th class="px-3 py-3 text-left">{{ app.t('stockOps.product') }}</th>
+                  <th class="px-3 py-3 text-left">{{ app.t('stockOps.location') }}</th>
+                  <th class="px-3 py-3 text-left">{{ app.t('stockOps.type') }}</th>
+                  <th class="px-3 py-3 text-right">{{ app.t('stockOps.change') }}</th>
+                  <th class="px-3 py-3 text-right">{{ app.t('stockOps.before') }}</th>
+                  <th class="px-3 py-3 text-right">{{ app.t('stockOps.after') }}</th>
+                  <th class="px-3 py-3 text-left">{{ app.t('stockOps.note') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tr v-for="movement in movements" :key="movement.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
+                  <td class="px-3 py-3">{{ new Date(movement.created_at).toLocaleString(locale) }}</td>
+                  <td class="px-3 py-3">
+                    <div class="flex min-w-0 items-center gap-3">
+                      <ProductAvatar :src="movementImageURL(movement)" :updated-at="movementImageUpdatedAt(movement)" :name="movement.product_name" size="sm" shape="square" />
+                      <div class="min-w-0">
+                        <b class="block truncate">{{ movement.product_name }}</b>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">{{ movement.sku }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-3 py-3">{{ movement.location_name }}</td>
+                  <td class="px-3 py-3"><AppBadge :tone="movementTone(movement.reference_type)">{{ movement.reference_type }}</AppBadge></td>
+                  <td class="px-3 py-3 text-right font-black" :class="movement.quantity_change < 0 ? 'text-red-600 dark:text-red-300' : 'text-brand-700 dark:text-emerald-200'">{{ signed(movement.quantity_change) }}</td>
+                  <td class="px-3 py-3 text-right">{{ movement.before_stock }}</td>
+                  <td class="px-3 py-3 text-right">{{ movement.after_stock }}</td>
+                  <td class="max-w-[220px] truncate px-3 py-3" :title="movement.note">{{ movement.note || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grid gap-3 md:hidden">
+            <article v-for="movement in movements" :key="movement.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/60">
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex min-w-0 items-center gap-3">
+                  <ProductAvatar :src="movementImageURL(movement)" :updated-at="movementImageUpdatedAt(movement)" :name="movement.product_name" size="sm" shape="square" />
+                  <div class="min-w-0">
+                    <h3 class="truncate font-black">{{ movement.product_name }}</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ movement.location_name }} · {{ movement.sku }}</p>
+                  </div>
+                </div>
+                <span class="font-black" :class="movement.quantity_change < 0 ? 'text-red-600 dark:text-red-300' : 'text-brand-700 dark:text-emerald-200'">{{ signed(movement.quantity_change) }}</span>
+              </div>
+              <div class="mt-3 flex flex-wrap gap-2"><AppBadge :tone="movementTone(movement.reference_type)">{{ movement.reference_type }}</AppBadge><span class="text-xs text-slate-500 dark:text-slate-400">{{ new Date(movement.created_at).toLocaleString(locale) }}</span></div>
+              <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
+                <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.before') }}</dt><dd class="font-semibold">{{ movement.before_stock }}</dd></div>
+                <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.after') }}</dt><dd class="font-semibold">{{ movement.after_stock }}</dd></div>
+                <div class="col-span-2"><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.note') }}</dt><dd class="font-semibold">{{ movement.note || '-' }}</dd></div>
+              </dl>
+            </article>
+          </div>
+
+          <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 md:flex-row md:items-center md:justify-between">
+            <div class="flex flex-wrap items-center gap-2">
+              <span>{{ app.t('stockOps.show') }}</span>
+              <AppSelect :model-value="pageSize" @update:model-value="changePageSize">
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </AppSelect>
+              <span>{{ app.t('stockOps.perPage') }}</span>
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.total') }} {{ totalMovements }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-2 md:justify-end">
+              <AppButton variant="secondary" :disabled="page <= 1 || loadingMovements" @click="previousPage">{{ app.t('stockOps.previous') }}</AppButton>
+              <span class="font-bold">{{ app.t('stockOps.page') }} {{ page }} / {{ totalPages }}</span>
+              <AppButton variant="secondary" :disabled="page >= totalPages || loadingMovements" @click="nextPage">{{ app.t('stockOps.next') }}</AppButton>
+            </div>
+          </div>
+        </div>
+      </AppCard>
+    </div>
+
+    <AppModal :open="adjustOpen" :title="app.t('stockOps.adjustTitle')" :description="app.t('stockOps.adjustDescription')" @close="adjustOpen = false">
+      <form class="grid gap-3" @submit.prevent="adjustStock">
+        <div class="rounded-2xl bg-slate-50 p-4 text-sm dark:bg-slate-950/60">
+          <p><b>{{ app.t('stockOps.currentStock') }}:</b> {{ stockLine(currentStock) }}</p>
+          <p><b>{{ app.t('stockOps.afterAdjustment') }}:</b> {{ stockLine(afterAdjustmentPreview) }}</p>
+        </div>
+        <AppInput v-model="adjustment.quantity" :label="app.t('stockOps.quantity')" type="number" />
+        <AppTextarea v-model="adjustment.note" :label="app.t('stockOps.note')" />
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <AppButton type="button" variant="secondary" :disabled="adjustSubmitting" @click="adjustOpen = false">{{ app.t('stockOps.cancel') }}</AppButton>
+          <AppButton type="submit" :loading="adjustSubmitting" :disabled="adjustSubmitting">{{ app.t('stockOps.submitAdjustment') }}</AppButton>
+        </div>
+      </form>
+    </AppModal>
+  </section>
+</template>

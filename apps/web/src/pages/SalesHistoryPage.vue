@@ -5,14 +5,19 @@ import { apiClient, postJSON } from '../api/client'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
+import AppIcon from '../components/AppIcon.vue'
 import AppInput from '../components/AppInput.vue'
 import AppSelect from '../components/AppSelect.vue'
 import AppTextarea from '../components/AppTextarea.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
+import StatCard from '../components/StatCard.vue'
+import type { TranslationKey } from '../i18n'
+import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { Location, Receipt } from '../types/navigation'
 
+const app = useAppStore()
 const auth = useAuthStore()
 const sales = ref<Receipt[]>([])
 const locations = ref<Location[]>([])
@@ -20,6 +25,8 @@ const loading = ref(false)
 const error = ref('')
 const cancelTarget = ref<Receipt | null>(null)
 const cancelReason = ref('')
+const page = ref(1)
+const pageSize = ref(10)
 
 const filters = reactive({
   date_from: '',
@@ -32,6 +39,8 @@ const filters = reactive({
 })
 
 const canCancel = computed(() => auth.user?.role === 'ADMIN' || auth.user?.role === 'MANAGER')
+const canViewReceipt = computed(() => auth.hasPermission('sales.receipt.view'))
+const locale = computed(() => app.language === 'th' ? 'th-TH' : 'en-US')
 const totals = computed(() => {
   const completed = sales.value.filter((sale) => sale.status === 'COMPLETED')
   return {
@@ -40,13 +49,42 @@ const totals = computed(() => {
     completedTotal: completed.reduce((sum, sale) => sum + sale.total_amount, 0),
   }
 })
+const totalPages = computed(() => Math.max(1, Math.ceil(sales.value.length / pageSize.value)))
+const visibleSales = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return sales.value.slice(start, start + pageSize.value)
+})
+
+function t(key: TranslationKey, params: Record<string, string | number> = {}) {
+  let text = String(app.t(key))
+  for (const [name, value] of Object.entries(params)) text = text.replaceAll(`{${name}}`, String(value))
+  return text
+}
 
 function money(value: number) {
-  return value.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return value.toLocaleString(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function moneyWithCurrency(value: number) {
+  return t('sales.currency', { amount: money(value) })
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString(locale.value)
 }
 
 function statusClass(status: Receipt['status']) {
-  return status === 'CANCELLED' ? 'bg-slate-100 text-slate-600' : 'bg-brand-100 text-brand-700'
+  return status === 'CANCELLED'
+    ? 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-100'
+    : 'bg-brand-100 text-brand-700 dark:bg-emerald-500/20 dark:text-emerald-100'
+}
+
+function statusLabel(status: Receipt['status']) {
+  return app.t(status === 'CANCELLED' ? 'sales.status.cancelled' : 'sales.status.completed')
+}
+
+function paymentLabel(method: Receipt['payment_method']) {
+  return method === 'QR' ? app.t('sales.payment.qr') : app.t('sales.payment.cash')
 }
 
 function buildQuery() {
@@ -63,8 +101,9 @@ async function loadSales() {
   try {
     const query = buildQuery()
     sales.value = await apiClient<Receipt[]>(`/v1/sales${query ? `?${query}` : ''}`)
+    page.value = 1
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Could not load sales'
+    error.value = err instanceof Error ? err.message : app.t('sales.loadFailed')
   } finally {
     loading.value = false
   }
@@ -85,9 +124,26 @@ function resetFilters() {
   loadSales()
 }
 
+function changePageSize(value: string) {
+  pageSize.value = Number(value)
+  page.value = 1
+}
+
+function previousPage() {
+  if (page.value > 1) page.value -= 1
+}
+
+function nextPage() {
+  if (page.value < totalPages.value) page.value += 1
+}
+
 function openCancel(sale: Receipt) {
   cancelTarget.value = sale
   cancelReason.value = ''
+}
+
+function receiptRoute(sale: Receipt) {
+  return `/sales/${sale.id}/receipt`
 }
 
 async function cancelSale() {
@@ -99,7 +155,7 @@ async function cancelSale() {
     cancelReason.value = ''
     await loadSales()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Could not cancel sale'
+    error.value = err instanceof Error ? err.message : app.t('sales.cancelFailed')
   }
 }
 
@@ -110,87 +166,79 @@ onMounted(async () => {
 
 <template>
   <section>
-    <PageHeader title="Sales History" eyebrow="Receipts" description="Search sales, inspect receipts, and cancel completed sales without deleting evidence.">
-      <AppButton variant="secondary" @click="loadSales">Refresh</AppButton>
+    <PageHeader :title="app.t('sales.title')" :eyebrow="app.t('sales.eyebrow')" :description="app.t('sales.description')" icon="purchase-order">
+      <AppButton variant="secondary" icon="history" @click="loadSales">{{ app.t('sales.refresh') }}</AppButton>
     </PageHeader>
 
     <div class="grid gap-4">
-      <AppCard>
+      <AppCard class="dark:bg-slate-900/80">
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <AppInput v-model="filters.date_from" label="Date from" type="date" />
-          <AppInput v-model="filters.date_to" label="Date to" type="date" />
-          <AppInput v-model="filters.receipt_no" label="Receipt no." placeholder="RC..." />
-          <AppInput v-model="filters.cashier_id" label="Cashier ID" type="number" />
-          <AppSelect v-model="filters.location_id" label="Location">
-            <option value="">All locations</option>
+          <AppInput v-model="filters.date_from" :label="app.t('sales.dateFrom')" type="date" />
+          <AppInput v-model="filters.date_to" :label="app.t('sales.dateTo')" type="date" />
+          <AppInput v-model="filters.receipt_no" :label="app.t('sales.receiptNo')" placeholder="RC..." />
+          <AppInput v-model="filters.cashier_id" :label="app.t('sales.cashierId')" type="number" />
+          <AppSelect v-model="filters.location_id" :label="app.t('sales.location')">
+            <option value="">{{ app.t('sales.allLocations') }}</option>
             <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
           </AppSelect>
-          <AppSelect v-model="filters.payment_method" label="Payment">
-            <option value="">All payments</option>
-            <option value="CASH">CASH</option>
-            <option value="QR">QR</option>
+          <AppSelect v-model="filters.payment_method" :label="app.t('sales.payment')">
+            <option value="">{{ app.t('sales.allPayments') }}</option>
+            <option value="CASH">{{ app.t('sales.payment.cash') }}</option>
+            <option value="QR">{{ app.t('sales.payment.qr') }}</option>
           </AppSelect>
-          <AppSelect v-model="filters.status" label="Status">
-            <option value="">All statuses</option>
-            <option value="COMPLETED">COMPLETED</option>
-            <option value="CANCELLED">CANCELLED</option>
+          <AppSelect v-model="filters.status" :label="app.t('sales.status')">
+            <option value="">{{ app.t('sales.allStatuses') }}</option>
+            <option value="COMPLETED">{{ app.t('sales.status.completed') }}</option>
+            <option value="CANCELLED">{{ app.t('sales.status.cancelled') }}</option>
           </AppSelect>
           <div class="flex items-end gap-2">
-            <AppButton class="flex-1" @click="loadSales">Apply</AppButton>
-            <AppButton class="flex-1" variant="secondary" @click="resetFilters">Reset</AppButton>
+            <AppButton class="flex-1" icon="search" @click="loadSales">{{ app.t('sales.apply') }}</AppButton>
+            <AppButton class="flex-1" variant="secondary" @click="resetFilters">{{ app.t('sales.reset') }}</AppButton>
           </div>
         </div>
       </AppCard>
 
       <div class="grid gap-3 md:grid-cols-3">
-        <AppCard>
-          <p class="text-sm text-slate-500">Completed sales</p>
-          <p class="mt-1 text-2xl font-bold">{{ totals.completedCount }}</p>
-        </AppCard>
-        <AppCard>
-          <p class="text-sm text-slate-500">Completed total</p>
-          <p class="mt-1 text-2xl font-bold">{{ money(totals.completedTotal) }} บาท</p>
-        </AppCard>
-        <AppCard>
-          <p class="text-sm text-slate-500">Cancelled</p>
-          <p class="mt-1 text-2xl font-bold">{{ totals.cancelledCount }}</p>
-        </AppCard>
+        <StatCard :label="app.t('sales.completedSales')" :value="totals.completedCount" :helper="app.t('sales.completedHelper')" icon="receipt-text" />
+        <StatCard :label="app.t('sales.completedTotal')" :value="moneyWithCurrency(totals.completedTotal)" :helper="app.t('sales.totalHelper')" icon="banknote" tone="success" />
+        <StatCard :label="app.t('sales.cancelled')" :value="totals.cancelledCount" :helper="app.t('sales.cancelledHelper')" icon="circle-x" tone="danger" />
       </div>
 
-      <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
-      <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading sales...</div>
-      <AppEmptyState v-else-if="sales.length === 0" title="No sales found" description="Try changing filters or make a sale from POS." />
+      <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ error }}</div>
+      <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:bg-slate-900 dark:text-slate-300">{{ app.t('sales.loading') }}</div>
+      <AppEmptyState v-else-if="sales.length === 0" :title="app.t('sales.empty')" :description="app.t('sales.emptyDescription')" />
 
-      <AppCard v-else>
+      <AppCard v-else class="dark:bg-slate-900/80">
         <div class="hidden overflow-x-auto lg:block">
           <table class="min-w-full divide-y divide-slate-200 text-sm">
             <thead class="bg-slate-50">
               <tr>
-                <th class="px-3 py-2 text-left">Receipt</th>
-                <th class="px-3 py-2 text-left">Date</th>
-                <th class="px-3 py-2 text-left">Location</th>
-                <th class="px-3 py-2 text-left">Cashier</th>
-                <th class="px-3 py-2 text-right">Total</th>
-                <th class="px-3 py-2 text-left">Payment</th>
-                <th class="px-3 py-2 text-left">Status</th>
-                <th class="px-3 py-2 text-left">Actions</th>
+                <th class="px-3 py-2 text-left">{{ app.t('sales.receipt') }}</th>
+                <th class="px-3 py-2 text-left">{{ app.t('sales.date') }}</th>
+                <th class="px-3 py-2 text-left">{{ app.t('sales.location') }}</th>
+                <th class="px-3 py-2 text-left">{{ app.t('sales.cashier') }}</th>
+                <th class="px-3 py-2 text-right">{{ app.t('sales.total') }}</th>
+                <th class="px-3 py-2 text-left">{{ app.t('sales.payment') }}</th>
+                <th class="px-3 py-2 text-left">{{ app.t('sales.status') }}</th>
+                <th class="px-3 py-2 text-left">{{ app.t('sales.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-for="sale in sales" :key="sale.id">
+              <tr v-for="sale in visibleSales" :key="sale.id">
                 <td class="px-3 py-2 font-semibold">{{ sale.receipt_no }}</td>
-                <td class="px-3 py-2">{{ new Date(sale.created_at).toLocaleString('th-TH') }}</td>
+                <td class="px-3 py-2">{{ formatDate(sale.created_at) }}</td>
                 <td class="px-3 py-2">{{ sale.location_name }}</td>
                 <td class="px-3 py-2">{{ sale.cashier_name }}</td>
                 <td class="px-3 py-2 text-right font-semibold">{{ money(sale.total_amount) }}</td>
-                <td class="px-3 py-2">{{ sale.payment_method }}</td>
-                <td class="px-3 py-2"><span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(sale.status)">{{ sale.status }}</span></td>
+                <td class="px-3 py-2">{{ paymentLabel(sale.payment_method) }}</td>
+                <td class="px-3 py-2"><span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(sale.status)">{{ statusLabel(sale.status) }}</span></td>
                 <td class="px-3 py-2">
                   <div class="flex flex-wrap gap-2">
-                    <RouterLink :to="`/receipt-detail?id=${sale.id}`" class="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
-                      Receipt
+                    <RouterLink v-if="canViewReceipt" :to="receiptRoute(sale)" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                      <AppIcon name="receipt-text" :size="16" />
+                      {{ app.t('sales.viewReceipt') }}
                     </RouterLink>
-                    <AppButton v-if="canCancel && sale.status === 'COMPLETED'" variant="danger" @click="openCancel(sale)">Cancel</AppButton>
+                    <AppButton v-if="canCancel && sale.status === 'COMPLETED'" variant="danger" @click="openCancel(sale)">{{ app.t('sales.cancel') }}</AppButton>
                   </div>
                 </td>
               </tr>
@@ -199,40 +247,61 @@ onMounted(async () => {
         </div>
 
         <div class="grid gap-3 lg:hidden">
-          <article v-for="sale in sales" :key="sale.id" class="rounded-lg border border-slate-200 p-3">
+          <article v-for="sale in visibleSales" :key="sale.id" class="rounded-lg border border-slate-200 p-3">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <h2 class="font-bold">{{ sale.receipt_no }}</h2>
-                <p class="text-sm text-slate-500">{{ new Date(sale.created_at).toLocaleString('th-TH') }}</p>
+                <p class="text-sm text-slate-500">{{ formatDate(sale.created_at) }}</p>
               </div>
-              <span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(sale.status)">{{ sale.status }}</span>
+              <span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(sale.status)">{{ statusLabel(sale.status) }}</span>
             </div>
             <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
-              <div><dt class="text-slate-500">Location</dt><dd class="font-semibold">{{ sale.location_name }}</dd></div>
-              <div><dt class="text-slate-500">Cashier</dt><dd class="font-semibold">{{ sale.cashier_name }}</dd></div>
-              <div><dt class="text-slate-500">Payment</dt><dd class="font-semibold">{{ sale.payment_method }}</dd></div>
-              <div><dt class="text-slate-500">Total</dt><dd class="font-bold">{{ money(sale.total_amount) }} บาท</dd></div>
+              <div><dt class="text-slate-500">{{ app.t('sales.location') }}</dt><dd class="font-semibold">{{ sale.location_name }}</dd></div>
+              <div><dt class="text-slate-500">{{ app.t('sales.cashier') }}</dt><dd class="font-semibold">{{ sale.cashier_name }}</dd></div>
+              <div><dt class="text-slate-500">{{ app.t('sales.payment') }}</dt><dd class="font-semibold">{{ paymentLabel(sale.payment_method) }}</dd></div>
+              <div><dt class="text-slate-500">{{ app.t('sales.total') }}</dt><dd class="font-bold">{{ moneyWithCurrency(sale.total_amount) }}</dd></div>
             </dl>
-            <p v-if="sale.status === 'CANCELLED'" class="mt-2 text-sm text-slate-500">Reason: {{ sale.cancel_reason || '-' }}</p>
+            <p v-if="sale.status === 'CANCELLED'" class="mt-2 text-sm text-slate-500">{{ app.t('sales.reason') }}: {{ sale.cancel_reason || '-' }}</p>
             <div class="mt-3 flex flex-wrap gap-2">
-              <RouterLink :to="`/receipt-detail?id=${sale.id}`" class="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
-                Receipt
+              <RouterLink v-if="canViewReceipt" :to="receiptRoute(sale)" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                <AppIcon name="receipt-text" :size="16" />
+                {{ app.t('sales.viewReceipt') }}
               </RouterLink>
-              <AppButton v-if="canCancel && sale.status === 'COMPLETED'" variant="danger" @click="openCancel(sale)">Cancel sale</AppButton>
+              <AppButton v-if="canCancel && sale.status === 'COMPLETED'" variant="danger" @click="openCancel(sale)">{{ app.t('sales.cancelSale') }}</AppButton>
             </div>
           </article>
+        </div>
+
+        <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-slate-500 dark:text-slate-400">{{ app.t('sales.show') }}</span>
+            <AppSelect :model-value="pageSize" hide-arrow @update:model-value="changePageSize">
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </AppSelect>
+            <span class="text-slate-500 dark:text-slate-400">{{ app.t('sales.perPage') }}</span>
+            <span class="text-slate-500 dark:text-slate-400">{{ app.t('sales.totalRows') }} {{ sales.length }}</span>
+          </div>
+          <div class="flex items-center justify-end gap-2">
+            <AppButton variant="secondary" :disabled="page <= 1" @click="previousPage">{{ app.t('sales.previous') }}</AppButton>
+            <span class="font-bold text-slate-600 dark:text-slate-300">{{ t('sales.page', { page, total: totalPages }) }}</span>
+            <AppButton variant="secondary" :disabled="page >= totalPages" @click="nextPage">{{ app.t('sales.next') }}</AppButton>
+          </div>
         </div>
       </AppCard>
     </div>
 
     <ConfirmDialog
       :open="Boolean(cancelTarget)"
-      title="Cancel sale"
-      :message="cancelTarget ? `Cancel receipt ${cancelTarget.receipt_no}? Stock will be restored to ${cancelTarget.location_name}.` : ''"
+      :title="app.t('sales.cancelSale')"
+      :message="cancelTarget ? t('sales.cancelMessage', { receipt: cancelTarget.receipt_no, location: cancelTarget.location_name }) : ''"
+      :confirm-label="app.t('sales.cancel')"
+      :cancel-label="app.t('sales.close')"
       @close="cancelTarget = null"
       @confirm="cancelSale"
     >
-      <AppTextarea v-model="cancelReason" label="Cancel reason" placeholder="Required reason" />
+      <AppTextarea v-model="cancelReason" :label="app.t('sales.cancelReason')" :placeholder="app.t('sales.cancelReasonPlaceholder')" />
     </ConfirmDialog>
   </section>
 </template>

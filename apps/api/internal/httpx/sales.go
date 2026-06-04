@@ -15,18 +15,20 @@ import (
 )
 
 type POSProduct struct {
-	ID           uint64  `json:"id"`
-	SKU          string  `json:"sku"`
-	Name         string  `json:"name"`
-	Barcode      *string `json:"barcode"`
-	SellingPrice float64 `json:"selling_price"`
-	UnitCost     float64 `json:"unit_cost"`
-	Unit         string  `json:"unit"`
-	Threshold    int     `json:"threshold"`
-	ReorderPoint int     `json:"reorder_point"`
-	LocationID   uint64  `json:"location_id"`
-	Stock        int     `json:"stock"`
-	StockStatus  string  `json:"stock_status"`
+	ID           uint64     `json:"id"`
+	SKU          string     `json:"sku"`
+	Name         string     `json:"name"`
+	Barcode      *string    `json:"barcode"`
+	ImageURL     *string    `json:"image_url"`
+	ImageUpdated *time.Time `json:"image_updated_at"`
+	SellingPrice float64    `json:"selling_price"`
+	UnitCost     float64    `json:"unit_cost"`
+	Unit         string     `json:"unit"`
+	Threshold    int        `json:"threshold"`
+	ReorderPoint int        `json:"reorder_point"`
+	LocationID   uint64     `json:"location_id"`
+	Stock        int        `json:"stock"`
+	StockStatus  string     `json:"stock_status"`
 }
 
 type SaleInput struct {
@@ -184,7 +186,7 @@ func (s *Server) listPOSProducts(ctx context.Context, locationID uint64, query s
 		args = append(args, like, like, like)
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT p.id, p.sku, p.name, p.barcode, p.price, p.cost, p.unit, p.threshold, p.reorder_point,
+		SELECT p.id, p.sku, p.name, p.barcode, p.image_url, p.image_updated_at, p.price, p.cost, p.unit, p.threshold, p.reorder_point,
 		       l.id, COALESCE(ps.quantity, 0)
 		FROM products p
 		JOIN locations l ON l.id=?
@@ -200,8 +202,16 @@ func (s *Server) listPOSProducts(ctx context.Context, locationID uint64, query s
 	products := []POSProduct{}
 	for rows.Next() {
 		var item POSProduct
-		if err := rows.Scan(&item.ID, &item.SKU, &item.Name, &item.Barcode, &item.SellingPrice, &item.UnitCost, &item.Unit, &item.Threshold, &item.ReorderPoint, &item.LocationID, &item.Stock); err != nil {
+		var imageURL sql.NullString
+		var imageUpdated sql.NullTime
+		if err := rows.Scan(&item.ID, &item.SKU, &item.Name, &item.Barcode, &imageURL, &imageUpdated, &item.SellingPrice, &item.UnitCost, &item.Unit, &item.Threshold, &item.ReorderPoint, &item.LocationID, &item.Stock); err != nil {
 			return nil, err
+		}
+		if imageURL.Valid {
+			item.ImageURL = &imageURL.String
+		}
+		if imageUpdated.Valid {
+			item.ImageUpdated = &imageUpdated.Time
 		}
 		item.StockStatus = stockStatus(item.Stock, item.Threshold, item.ReorderPoint)
 		products = append(products, item)

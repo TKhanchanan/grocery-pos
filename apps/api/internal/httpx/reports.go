@@ -2,9 +2,11 @@ package httpx
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"grocery-pos/apps/api/internal/response"
 )
@@ -32,27 +34,31 @@ type SalesPeriodReport struct {
 }
 
 type ProductSalesReport struct {
-	ProductID   uint64  `json:"product_id"`
-	ProductName string  `json:"product_name"`
-	SKU         string  `json:"sku"`
-	Quantity    int     `json:"quantity"`
-	Revenue     float64 `json:"revenue"`
-	Cost        float64 `json:"cost"`
-	Profit      float64 `json:"profit"`
+	ProductID    uint64     `json:"product_id"`
+	ProductName  string     `json:"product_name"`
+	SKU          string     `json:"sku"`
+	ImageURL     *string    `json:"image_url"`
+	ImageUpdated *time.Time `json:"image_updated_at"`
+	Quantity     int        `json:"quantity"`
+	Revenue      float64    `json:"revenue"`
+	Cost         float64    `json:"cost"`
+	Profit       float64    `json:"profit"`
 }
 
 type StockReport struct {
-	ProductID    uint64  `json:"product_id"`
-	ProductName  string  `json:"product_name"`
-	SKU          string  `json:"sku"`
-	LocationID   uint64  `json:"location_id"`
-	LocationName string  `json:"location_name"`
-	Quantity     int     `json:"quantity"`
-	UnitCost     float64 `json:"unit_cost"`
-	TotalValue   float64 `json:"total_value"`
-	Threshold    int     `json:"threshold"`
-	ReorderPoint int     `json:"reorder_point"`
-	StockStatus  string  `json:"stock_status"`
+	ProductID    uint64     `json:"product_id"`
+	ProductName  string     `json:"product_name"`
+	SKU          string     `json:"sku"`
+	ImageURL     *string    `json:"image_url"`
+	ImageUpdated *time.Time `json:"image_updated_at"`
+	LocationID   uint64     `json:"location_id"`
+	LocationName string     `json:"location_name"`
+	Quantity     int        `json:"quantity"`
+	UnitCost     float64    `json:"unit_cost"`
+	TotalValue   float64    `json:"total_value"`
+	Threshold    int        `json:"threshold"`
+	ReorderPoint int        `json:"reorder_point"`
+	StockStatus  string     `json:"stock_status"`
 }
 
 type PaymentSummaryReport struct {
@@ -238,11 +244,13 @@ func (s *Server) productSalesReportForWhere(ctx context.Context, where []string,
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT si.product_id, si.product_name_snapshot, si.sku_snapshot, COALESCE(SUM(si.quantity), 0),
 		       COALESCE(SUM(si.line_total), 0), COALESCE(SUM(si.line_cost), 0),
-		       COALESCE(SUM(si.line_total - si.line_cost), 0) AS profit
+		       COALESCE(SUM(si.line_total - si.line_cost), 0) AS profit,
+		       p.image_url, p.image_updated_at
 		FROM sale_items si
 		JOIN sales s ON s.id=si.sale_id
+		LEFT JOIN products p ON p.id=si.product_id
 		WHERE `+strings.Join(where, " AND ")+`
-		GROUP BY si.product_id, si.product_name_snapshot, si.sku_snapshot
+		GROUP BY si.product_id, si.product_name_snapshot, si.sku_snapshot, p.image_url, p.image_updated_at
 		ORDER BY `+orderBy+`
 		LIMIT ?`, append(args, limit)...)
 	if err != nil {
@@ -252,8 +260,16 @@ func (s *Server) productSalesReportForWhere(ctx context.Context, where []string,
 	reports := []ProductSalesReport{}
 	for rows.Next() {
 		var report ProductSalesReport
-		if err := rows.Scan(&report.ProductID, &report.ProductName, &report.SKU, &report.Quantity, &report.Revenue, &report.Cost, &report.Profit); err != nil {
+		var imageURL sql.NullString
+		var imageUpdated sql.NullTime
+		if err := rows.Scan(&report.ProductID, &report.ProductName, &report.SKU, &report.Quantity, &report.Revenue, &report.Cost, &report.Profit, &imageURL, &imageUpdated); err != nil {
 			return nil, err
+		}
+		if imageURL.Valid {
+			report.ImageURL = &imageURL.String
+		}
+		if imageUpdated.Valid {
+			report.ImageUpdated = &imageUpdated.Time
 		}
 		reports = append(reports, report)
 	}
@@ -273,7 +289,7 @@ func (s *Server) stockReport(ctx context.Context, r *http.Request, extraWhere st
 
 func (s *Server) stockReportForWhere(ctx context.Context, where []string, args []any, limit int) ([]StockReport, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT p.id, p.name, p.sku, l.id, l.name, ps.quantity, p.cost,
+		SELECT p.id, p.name, p.sku, p.image_url, p.image_updated_at, l.id, l.name, ps.quantity, p.cost,
 		       ps.quantity * p.cost, p.threshold, p.reorder_point
 		FROM product_stocks ps
 		JOIN products p ON p.id=ps.product_id
@@ -288,8 +304,16 @@ func (s *Server) stockReportForWhere(ctx context.Context, where []string, args [
 	reports := []StockReport{}
 	for rows.Next() {
 		var report StockReport
-		if err := rows.Scan(&report.ProductID, &report.ProductName, &report.SKU, &report.LocationID, &report.LocationName, &report.Quantity, &report.UnitCost, &report.TotalValue, &report.Threshold, &report.ReorderPoint); err != nil {
+		var imageURL sql.NullString
+		var imageUpdated sql.NullTime
+		if err := rows.Scan(&report.ProductID, &report.ProductName, &report.SKU, &imageURL, &imageUpdated, &report.LocationID, &report.LocationName, &report.Quantity, &report.UnitCost, &report.TotalValue, &report.Threshold, &report.ReorderPoint); err != nil {
 			return nil, err
+		}
+		if imageURL.Valid {
+			report.ImageURL = &imageURL.String
+		}
+		if imageUpdated.Valid {
+			report.ImageUpdated = &imageUpdated.Time
 		}
 		report.StockStatus = stockStatus(report.Quantity, report.Threshold, report.ReorderPoint)
 		reports = append(reports, report)

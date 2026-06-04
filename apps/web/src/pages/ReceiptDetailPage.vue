@@ -3,19 +3,34 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { apiClient } from '../api/client'
 import AppButton from '../components/AppButton.vue'
-import AppCard from '../components/AppCard.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
+import { useAppStore } from '../stores/app'
 import type { Receipt } from '../types/navigation'
 
+const app = useAppStore()
 const route = useRoute()
 const receipt = ref<Receipt | null>(null)
 const loading = ref(false)
 const error = ref('')
-const receiptID = computed(() => String(route.query.id ?? ''))
+const receiptID = computed(() => {
+  const paramID = route.params.id
+  if (Array.isArray(paramID)) return paramID[0] ?? ''
+  return String(paramID ?? route.query.id ?? '')
+})
+const locale = computed(() => app.language === 'th' ? 'th-TH' : 'en-US')
 
 function money(value: number) {
-  return value.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return value.toLocaleString(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function formatDate(value: string | null) {
+  if (!value) return '-'
+  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+function paymentLabel(method: string) {
+  return method === 'QR' ? app.t('pos.qr') : app.t('pos.cash')
 }
 
 async function loadReceipt() {
@@ -26,13 +41,14 @@ async function loadReceipt() {
   try {
     receipt.value = await apiClient<Receipt>(`/v1/sales/${receiptID.value}/receipt`)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Could not load receipt'
+    error.value = err instanceof Error ? err.message : app.t('receipt.loadFailed')
   } finally {
     loading.value = false
   }
 }
 
 function printReceipt() {
+  if (!receipt.value || loading.value) return
   window.print()
 }
 
@@ -41,71 +57,206 @@ onMounted(loadReceipt)
 </script>
 
 <template>
-  <section>
-    <PageHeader title="Receipt Detail" eyebrow="Sales" description="Printable sale receipt with item snapshots, payment, and change.">
-      <div class="flex flex-wrap gap-2 print:hidden">
-        <RouterLink to="/pos" class="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
-          Back to POS
-        </RouterLink>
-        <AppButton :disabled="!receipt" @click="printReceipt">Print</AppButton>
-      </div>
-    </PageHeader>
-
-    <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
-    <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading receipt...</div>
-    <AppEmptyState v-else-if="!receipt" title="No receipt selected" description="Open a receipt from the POS success modal or sales history." />
-
-    <AppCard v-else class="mx-auto max-w-3xl print:border-0 print:shadow-none">
-      <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
-        <div>
-          <p class="text-sm font-semibold uppercase text-brand-700">Grocery POS</p>
-          <h2 class="text-2xl font-bold">{{ receipt.receipt_no }}</h2>
-          <p class="text-sm text-slate-500">{{ new Date(receipt.created_at).toLocaleString('th-TH') }}</p>
+  <section class="receipt-page">
+    <div class="no-print">
+      <PageHeader :title="app.t('receipt.title')" :eyebrow="app.t('receipt.eyebrow')" :description="app.t('receipt.description')" icon="receipt-text">
+        <div class="flex flex-wrap gap-2">
+          <RouterLink to="/pos" class="focus-ring inline-flex min-h-11 items-center justify-center rounded-xl bg-white/85 px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-brand-50 dark:bg-slate-900/85 dark:text-slate-100 dark:hover:bg-teal-400/10">
+            {{ app.t('receipt.backToPOS') }}
+          </RouterLink>
+          <RouterLink to="/sales-history" class="focus-ring inline-flex min-h-11 items-center justify-center rounded-xl bg-white/85 px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-brand-50 dark:bg-slate-900/85 dark:text-slate-100 dark:hover:bg-teal-400/10">
+            {{ app.t('receipt.backToSales') }}
+          </RouterLink>
+          <AppButton :disabled="!receipt || loading" icon="receipt-text" @click="printReceipt">{{ app.t('receipt.print') }}</AppButton>
         </div>
-        <div class="text-right text-sm">
-          <p><b>Location:</b> {{ receipt.location_name }}</p>
-          <p><b>Cashier:</b> {{ receipt.cashier_name }}</p>
-          <p><b>Status:</b> <span :class="receipt.status === 'CANCELLED' ? 'text-slate-500' : 'text-brand-700'">{{ receipt.status }}</span></p>
+      </PageHeader>
+
+      <div v-if="error" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">{{ error }}</div>
+      <div v-if="loading" class="mb-4 rounded-xl bg-white/85 p-6 text-sm text-slate-500 shadow-sm dark:bg-slate-900/85 dark:text-slate-300">{{ app.t('receipt.loading') }}</div>
+      <AppEmptyState v-else-if="!receipt" :title="app.t('receipt.noReceipt')" :description="app.t('receipt.noReceiptDescription')" />
+    </div>
+
+    <div v-if="receipt" class="receipt-preview">
+      <article id="receipt-print-area" class="receipt-print-area">
+        <header class="receipt-shop">
+          <p class="receipt-shop-name">Grocery POS</p>
+          <p>{{ app.t('receipt.receipt') }}</p>
+        </header>
+
+        <dl class="receipt-meta">
+          <div><dt>{{ app.t('receipt.receiptNo') }}</dt><dd>{{ receipt.receipt_no }}</dd></div>
+          <div><dt>{{ app.t('receipt.date') }}</dt><dd>{{ formatDate(receipt.created_at) }}</dd></div>
+          <div><dt>{{ app.t('receipt.cashier') }}</dt><dd>{{ receipt.cashier_name }}</dd></div>
+          <div><dt>{{ app.t('receipt.location') }}</dt><dd>{{ receipt.location_name }}</dd></div>
+          <div><dt>{{ app.t('receipt.paymentMethod') }}</dt><dd>{{ paymentLabel(receipt.payment_method) }}</dd></div>
+          <div><dt>{{ app.t('receipt.status') }}</dt><dd>{{ receipt.status }}</dd></div>
+        </dl>
+
+        <div v-if="receipt.status === 'CANCELLED'" class="receipt-cancelled">
+          <p><b>{{ app.t('receipt.cancelledReceipt') }}</b></p>
+          <p>{{ app.t('receipt.reason') }}: {{ receipt.cancel_reason || '-' }}</p>
+          <p v-if="receipt.cancelled_at">{{ app.t('receipt.cancelledAt') }} {{ formatDate(receipt.cancelled_at) }}</p>
         </div>
-      </div>
 
-      <div v-if="receipt.status === 'CANCELLED'" class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-        <p class="font-bold">Cancelled receipt</p>
-        <p class="text-slate-600">Reason: {{ receipt.cancel_reason || '-' }}</p>
-        <p v-if="receipt.cancelled_at" class="text-slate-500">Cancelled at {{ new Date(receipt.cancelled_at).toLocaleString('th-TH') }}</p>
-      </div>
+        <section class="receipt-lines">
+          <h2>{{ app.t('receipt.items') }}</h2>
+          <div class="receipt-line receipt-line-head">
+            <span>{{ app.t('receipt.items') }}</span>
+            <span>{{ app.t('receipt.quantity') }}</span>
+            <span>{{ app.t('receipt.price') }}</span>
+            <span>{{ app.t('receipt.subtotal') }}</span>
+          </div>
+          <div v-for="item in receipt.items" :key="item.id" class="receipt-line">
+            <span>
+              <b>{{ item.product_name }}</b>
+              <small>{{ item.sku }}</small>
+            </span>
+            <span>{{ item.quantity }}</span>
+            <span>{{ money(item.price) }}</span>
+            <span>{{ money(item.line_total) }}</span>
+          </div>
+        </section>
 
-      <div class="mt-4 overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-200 text-sm">
-          <thead class="bg-slate-50">
-            <tr>
-              <th class="px-3 py-2 text-left">Product</th>
-              <th class="px-3 py-2 text-right">Qty</th>
-              <th class="px-3 py-2 text-right">Price</th>
-              <th class="px-3 py-2 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            <tr v-for="item in receipt.items" :key="item.id">
-              <td class="px-3 py-2">
-                <p class="font-semibold">{{ item.product_name }}</p>
-                <p class="text-xs text-slate-500">{{ item.sku }}</p>
-              </td>
-              <td class="px-3 py-2 text-right">{{ item.quantity }}</td>
-              <td class="px-3 py-2 text-right">{{ money(item.price) }}</td>
-              <td class="px-3 py-2 text-right font-semibold">{{ money(item.line_total) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <dl class="receipt-totals">
+          <div><dt>{{ app.t('receipt.subtotal') }}</dt><dd>{{ money(receipt.subtotal) }}</dd></div>
+          <div class="receipt-total-row"><dt>{{ app.t('receipt.total') }}</dt><dd>{{ money(receipt.total_amount) }}</dd></div>
+          <div><dt>{{ app.t('receipt.received') }}</dt><dd>{{ money(receipt.paid_amount) }}</dd></div>
+          <div><dt>{{ app.t('receipt.change') }}</dt><dd>{{ money(receipt.change_amount) }}</dd></div>
+        </dl>
 
-      <dl class="mt-4 ml-auto grid max-w-sm gap-2 text-sm">
-        <div class="flex justify-between"><dt class="text-slate-500">Subtotal</dt><dd class="font-semibold">{{ money(receipt.subtotal) }} บาท</dd></div>
-        <div class="flex justify-between"><dt class="text-slate-500">Total</dt><dd class="font-bold">{{ money(receipt.total_amount) }} บาท</dd></div>
-        <div class="flex justify-between"><dt class="text-slate-500">Paid</dt><dd class="font-semibold">{{ money(receipt.paid_amount) }} บาท</dd></div>
-        <div class="flex justify-between"><dt class="text-slate-500">Change</dt><dd class="font-bold">{{ money(receipt.change_amount) }} บาท</dd></div>
-        <div class="flex justify-between"><dt class="text-slate-500">Payment</dt><dd class="font-semibold">{{ receipt.payment_method }}</dd></div>
-      </dl>
-    </AppCard>
+        <footer class="receipt-footer">
+          {{ app.t('receipt.thankYou') }}
+        </footer>
+      </article>
+    </div>
   </section>
 </template>
+
+<style scoped>
+.receipt-preview {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 2rem;
+}
+
+.receipt-print-area {
+  width: min(100%, 420px);
+  background: #ffffff;
+  color: #111827;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14);
+}
+
+.receipt-shop {
+  border-bottom: 1px dashed #94a3b8;
+  padding-bottom: 10px;
+  text-align: center;
+}
+
+.receipt-shop-name {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.receipt-meta,
+.receipt-totals {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.receipt-meta div,
+.receipt-totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.receipt-meta dt,
+.receipt-totals dt {
+  color: #64748b;
+}
+
+.receipt-meta dd,
+.receipt-totals dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 700;
+}
+
+.receipt-cancelled {
+  margin-top: 12px;
+  border: 1px dashed #94a3b8;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.receipt-lines {
+  margin-top: 14px;
+  border-top: 1px dashed #94a3b8;
+  border-bottom: 1px dashed #94a3b8;
+  padding: 10px 0;
+}
+
+.receipt-lines h2 {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.receipt-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 58px 64px;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 12px;
+  align-items: start;
+}
+
+.receipt-line span:not(:first-child) {
+  text-align: right;
+}
+
+.receipt-line b,
+.receipt-line small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.receipt-line small {
+  color: #64748b;
+}
+
+.receipt-line-head {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.receipt-total-row {
+  border-top: 1px dashed #94a3b8;
+  margin-top: 4px;
+  padding-top: 8px;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.receipt-footer {
+  border-top: 1px dashed #94a3b8;
+  margin-top: 14px;
+  padding-top: 12px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media print {
+  .receipt-preview {
+    display: block;
+    padding: 0;
+  }
+}
+</style>

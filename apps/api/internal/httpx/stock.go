@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"grocery-pos/apps/api/internal/response"
@@ -26,21 +27,69 @@ type AdjustmentInput struct {
 }
 
 type StockMovement struct {
-	ID             uint64    `json:"id"`
-	ProductID      uint64    `json:"product_id"`
-	ProductName    string    `json:"product_name"`
-	SKU            string    `json:"sku"`
-	LocationID     uint64    `json:"location_id"`
-	LocationName   string    `json:"location_name"`
-	ReferenceType  string    `json:"reference_type"`
-	ReferenceID    *uint64   `json:"reference_id"`
-	QuantityChange int       `json:"quantity_change"`
-	BeforeStock    int       `json:"before_stock"`
-	AfterStock     int       `json:"after_stock"`
-	UnitCost       *float64  `json:"unit_cost"`
-	Note           string    `json:"note"`
-	CreatedBy      *uint64   `json:"created_by"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID             uint64     `json:"id"`
+	ProductID      uint64     `json:"product_id"`
+	ProductName    string     `json:"product_name"`
+	SKU            string     `json:"sku"`
+	ImageURL       *string    `json:"image_url"`
+	ImageUpdated   *time.Time `json:"image_updated_at"`
+	LocationID     uint64     `json:"location_id"`
+	LocationName   string     `json:"location_name"`
+	ReferenceType  string     `json:"reference_type"`
+	ReferenceID    *uint64    `json:"reference_id"`
+	QuantityChange int        `json:"quantity_change"`
+	BeforeStock    int        `json:"before_stock"`
+	AfterStock     int        `json:"after_stock"`
+	UnitCost       *float64   `json:"unit_cost"`
+	Note           string     `json:"note"`
+	CreatedBy      *uint64    `json:"created_by"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+type StockMovementPage struct {
+	Items    []StockMovement `json:"items"`
+	Total    int             `json:"total"`
+	Page     int             `json:"page"`
+	PageSize int             `json:"page_size"`
+}
+
+type StockOperationOptions struct {
+	Products  []Product      `json:"products"`
+	Locations []Location     `json:"locations"`
+	Stocks    []ProductStock `json:"stocks"`
+}
+
+func (s *Server) stockOperationOptions(w http.ResponseWriter, r *http.Request) {
+	products, err := s.listProducts(r.Context(), r)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load products.")
+		return
+	}
+	locationRows, err := s.db.QueryContext(r.Context(), `SELECT id, name, description, active, created_at FROM locations ORDER BY name`)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load locations.")
+		return
+	}
+	defer locationRows.Close()
+	locations := []Location{}
+	for locationRows.Next() {
+		var item Location
+		if err := locationRows.Scan(&item.ID, &item.Name, &item.Description, &item.Active, &item.CreatedAt); err != nil {
+			response.ErrorJSON(w, http.StatusInternalServerError, "SCAN_FAILED", "Could not read locations.")
+			return
+		}
+		locations = append(locations, item)
+	}
+	stocks, err := s.queryProductStocks(r.Context(), nil)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load product stocks.")
+		return
+	}
+	response.JSON(w, http.StatusOK, StockOperationOptions{
+		Products:  products,
+		Locations: locations,
+		Stocks:    stocks,
+	})
 }
 
 func (s *Server) restockProduct(w http.ResponseWriter, r *http.Request) {
@@ -84,14 +133,55 @@ func (s *Server) adjustProductStock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) stockMovements(w http.ResponseWriter, r *http.Request) {
+	page := positiveQueryInt(r, "page", 1)
+	pageSize := positiveQueryInt(r, "page_size", 20)
+	if pageSize != 10 && pageSize != 20 && pageSize != 50 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	where := []string{"1=1"}
+	args := []any{}
+	query := r.URL.Query()
+	if value := strings.TrimSpace(query.Get("product_id")); value != "" {
+		where = append(where, "sm.product_id=?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("location_id")); value != "" {
+		where = append(where, "sm.location_id=?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("type")); value != "" {
+		where = append(where, "sm.reference_type=?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("date_from")); value != "" {
+		where = append(where, "sm.created_at >= ?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("date_to")); value != "" {
+		where = append(where, "sm.created_at < DATE_ADD(?, INTERVAL 1 DAY)")
+		args = append(args, value)
+	}
+
+	var total int
+	if err := s.db.QueryRowContext(r.Context(), `
+		SELECT COUNT(*)
+		FROM stock_movements sm
+		WHERE `+strings.Join(where, " AND "), args...).Scan(&total); err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not count stock movements.")
+		return
+	}
+
 	rows, err := s.db.QueryContext(r.Context(), `
-		SELECT sm.id, sm.product_id, p.name, p.sku, sm.location_id, l.name, sm.reference_type, sm.reference_id,
+		SELECT sm.id, sm.product_id, p.name, p.sku, p.image_url, p.image_updated_at, sm.location_id, l.name, sm.reference_type, sm.reference_id,
 		       sm.quantity_change, sm.before_stock, sm.after_stock, sm.unit_cost, sm.note, sm.created_by, sm.created_at
 		FROM stock_movements sm
 		JOIN products p ON p.id=sm.product_id
 		JOIN locations l ON l.id=sm.location_id
+		WHERE `+strings.Join(where, " AND ")+`
 		ORDER BY sm.id DESC
-		LIMIT 300`)
+		LIMIT ? OFFSET ?`, append(args, pageSize, offset)...)
 	if err != nil {
 		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load stock movements.")
 		return
@@ -100,13 +190,34 @@ func (s *Server) stockMovements(w http.ResponseWriter, r *http.Request) {
 	movements := []StockMovement{}
 	for rows.Next() {
 		var item StockMovement
-		if err := rows.Scan(&item.ID, &item.ProductID, &item.ProductName, &item.SKU, &item.LocationID, &item.LocationName, &item.ReferenceType, &item.ReferenceID, &item.QuantityChange, &item.BeforeStock, &item.AfterStock, &item.UnitCost, &item.Note, &item.CreatedBy, &item.CreatedAt); err != nil {
+		var imageURL sql.NullString
+		var imageUpdated sql.NullTime
+		if err := rows.Scan(&item.ID, &item.ProductID, &item.ProductName, &item.SKU, &imageURL, &imageUpdated, &item.LocationID, &item.LocationName, &item.ReferenceType, &item.ReferenceID, &item.QuantityChange, &item.BeforeStock, &item.AfterStock, &item.UnitCost, &item.Note, &item.CreatedBy, &item.CreatedAt); err != nil {
 			response.ErrorJSON(w, http.StatusInternalServerError, "SCAN_FAILED", "Could not read stock movements.")
 			return
 		}
+		if imageURL.Valid {
+			item.ImageURL = &imageURL.String
+		}
+		if imageUpdated.Valid {
+			item.ImageUpdated = &imageUpdated.Time
+		}
 		movements = append(movements, item)
 	}
-	response.JSON(w, http.StatusOK, movements)
+	response.JSON(w, http.StatusOK, StockMovementPage{
+		Items:    movements,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
+}
+
+func positiveQueryInt(r *http.Request, name string, fallback int) int {
+	value, err := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get(name)))
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }
 
 func (s *Server) restock(ctx context.Context, user User, productID uint64, body RestockInput) (StockMovement, error) {
@@ -236,13 +347,21 @@ func insertStockMovement(ctx context.Context, tx *sql.Tx, productID, locationID 
 
 func (s *Server) stockMovementByID(ctx context.Context, id uint64) (StockMovement, error) {
 	var item StockMovement
+	var imageURL sql.NullString
+	var imageUpdated sql.NullTime
 	err := s.db.QueryRowContext(ctx, `
-		SELECT sm.id, sm.product_id, p.name, p.sku, sm.location_id, l.name, sm.reference_type, sm.reference_id,
+		SELECT sm.id, sm.product_id, p.name, p.sku, p.image_url, p.image_updated_at, sm.location_id, l.name, sm.reference_type, sm.reference_id,
 		       sm.quantity_change, sm.before_stock, sm.after_stock, sm.unit_cost, sm.note, sm.created_by, sm.created_at
 		FROM stock_movements sm
 		JOIN products p ON p.id=sm.product_id
 		JOIN locations l ON l.id=sm.location_id
-		WHERE sm.id=?`, id).Scan(&item.ID, &item.ProductID, &item.ProductName, &item.SKU, &item.LocationID, &item.LocationName, &item.ReferenceType, &item.ReferenceID, &item.QuantityChange, &item.BeforeStock, &item.AfterStock, &item.UnitCost, &item.Note, &item.CreatedBy, &item.CreatedAt)
+		WHERE sm.id=?`, id).Scan(&item.ID, &item.ProductID, &item.ProductName, &item.SKU, &imageURL, &imageUpdated, &item.LocationID, &item.LocationName, &item.ReferenceType, &item.ReferenceID, &item.QuantityChange, &item.BeforeStock, &item.AfterStock, &item.UnitCost, &item.Note, &item.CreatedBy, &item.CreatedAt)
+	if imageURL.Valid {
+		item.ImageURL = &imageURL.String
+	}
+	if imageUpdated.Valid {
+		item.ImageUpdated = &imageUpdated.Time
+	}
 	return item, err
 }
 

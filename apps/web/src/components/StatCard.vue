@@ -7,7 +7,7 @@ defineProps<{ label: string; value: string | number; helper?: string; icon?: Ico
 </script>
 
 <template>
-  <AppCard hover>
+  <AppCard hover class="dark:bg-slate-900/80">
     <div class="flex items-start justify-between gap-3">
       <p class="text-sm font-bold text-slate-500 dark:text-slate-400">{{ label }}</p>
       <div v-if="icon" class="grid h-10 w-10 place-items-center rounded-2xl bg-brand-100 text-brand-700 dark:bg-emerald-500/20 dark:text-emerald-200">

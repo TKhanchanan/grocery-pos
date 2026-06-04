@@ -30,19 +30,13 @@ const textSizeOptions = [
 
 const navItems: NavigationItem[] = [
   { labelKey: 'nav.dashboard', to: '/dashboard', permission: 'dashboard.view', icon: 'layout-dashboard' },
+  { labelKey: 'nav.reports', to: '/reports', permission: 'reports.view', icon: 'chart-column' },
   { labelKey: 'nav.pos', to: '/pos', permission: 'pos.view', icon: 'shopping-cart' },
   { labelKey: 'nav.products', to: '/products', permission: 'products.view', icon: 'package' },
   { labelKey: 'nav.categories', to: '/categories', permission: 'categories.view', icon: 'tags' },
-  { labelKey: 'nav.restock', to: '/restock', permission: 'stock.restock', icon: 'package-plus' },
-  { labelKey: 'nav.stockMovements', to: '/stock-movements', permission: 'stock.movements.view', icon: 'history' },
-  { labelKey: 'nav.locations', to: '/locations', permission: 'locations.view', icon: 'map-pin' },
-  { labelKey: 'nav.transfers', to: '/transfers', permission: 'transfers.view', icon: 'arrow-left-right' },
+  { labelKey: 'nav.stockOperations', to: '/stock-operations', permissions: ['stock.restock', 'stock.adjust', 'stock.movements.view'], icon: 'package-plus' },
+  { labelKey: 'nav.inventoryManagement', to: '/inventory-management', permissions: ['locations.view', 'transfers.view'], icon: 'map-pin' },
   { labelKey: 'nav.salesHistory', to: '/sales-history', permission: 'sales.view', icon: 'purchase-order' },
-  { labelKey: 'nav.receiptDetail', to: '/receipt-detail', permission: 'sales.receipt.view', icon: 'receipt-text' },
-  { labelKey: 'nav.alerts', to: '/alerts', permission: 'alerts.view', icon: 'bell' },
-  { labelKey: 'nav.reports', to: '/reports', permission: 'reports.view', icon: 'chart-column' },
-  { labelKey: 'nav.exports', to: '/exports', permission: 'exports.view', icon: 'download' },
-  { labelKey: 'nav.imports', to: '/imports', permission: 'imports.view', icon: 'upload' },
   { labelKey: 'nav.purchaseOrders', to: '/purchase-orders', permission: 'purchase_orders.view', icon: 'clipboard-list' },
   { labelKey: 'nav.suppliers', to: '/suppliers', permission: 'suppliers.view', icon: 'truck' },
   { labelKey: 'nav.users', to: '/users', permission: 'users.view', icon: 'users' },
@@ -53,9 +47,10 @@ const navItems: NavigationItem[] = [
 const visibleNavItems = computed(() => navItems.filter((item) => auth.canViewMenu(item)))
 const currentLanguage = computed(() => languageOptions.find((option) => option.value === app.language) ?? languageOptions[0])
 const currentTextSize = computed(() => textSizeOptions.find((option) => option.value === app.textSize) ?? textSizeOptions[1])
+const activeNavPath = computed(() => route.name === 'receipt-detail' || route.name === 'sale-receipt' ? '/sales-history' : route.path)
 
 function isActive(to: string) {
-  return route.path === to
+  return activeNavPath.value === to
 }
 
 function selectLanguage(value: 'th' | 'en') {

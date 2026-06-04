@@ -9,6 +9,7 @@ import AppInput from '../components/AppInput.vue'
 import AppSelect from '../components/AppSelect.vue'
 import AppTextarea from '../components/AppTextarea.vue'
 import PageHeader from '../components/PageHeader.vue'
+import ProductAvatar from '../components/ProductAvatar.vue'
 import type { Location, Product, PurchaseOrder, PurchaseOrderItem, Supplier } from '../types/navigation'
 
 const route = useRoute()
@@ -248,7 +249,15 @@ onMounted(load)
               </thead>
               <tbody class="divide-y divide-slate-100">
                 <tr v-for="item in selectedPO.items" :key="item.id">
-                  <td class="px-3 py-2"><p class="font-semibold">{{ item.product_name }}</p><p class="text-xs text-slate-500">{{ item.sku }}</p></td>
+                  <td class="px-3 py-2">
+                    <div class="flex min-w-0 items-center gap-3">
+                      <ProductAvatar :src="item.image_url" :updated-at="item.image_updated_at" :name="item.product_name" size="sm" shape="square" />
+                      <div class="min-w-0">
+                        <p class="truncate font-semibold">{{ item.product_name }}</p>
+                        <p class="text-xs text-slate-500">{{ item.sku }}</p>
+                      </div>
+                    </div>
+                  </td>
                   <td class="px-3 py-2 text-right">{{ item.quantity }}</td>
                   <td class="px-3 py-2 text-right">{{ item.received_quantity }}</td>
                   <td class="px-3 py-2 text-right">{{ money(item.unit_cost) }}</td>

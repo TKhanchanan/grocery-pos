@@ -56,15 +56,17 @@ type PurchaseOrder struct {
 }
 
 type PurchaseOrderItem struct {
-	ID               uint64  `json:"id,omitempty"`
-	POID             uint64  `json:"po_id,omitempty"`
-	ProductID        uint64  `json:"product_id"`
-	ProductName      string  `json:"product_name,omitempty"`
-	SKU              string  `json:"sku,omitempty"`
-	Quantity         int     `json:"quantity"`
-	ReceivedQuantity int     `json:"received_quantity"`
-	UnitCost         float64 `json:"unit_cost"`
-	LineCost         float64 `json:"line_cost"`
+	ID               uint64     `json:"id,omitempty"`
+	POID             uint64     `json:"po_id,omitempty"`
+	ProductID        uint64     `json:"product_id"`
+	ProductName      string     `json:"product_name,omitempty"`
+	SKU              string     `json:"sku,omitempty"`
+	ImageURL         *string    `json:"image_url,omitempty"`
+	ImageUpdated     *time.Time `json:"image_updated_at,omitempty"`
+	Quantity         int        `json:"quantity"`
+	ReceivedQuantity int        `json:"received_quantity"`
+	UnitCost         float64    `json:"unit_cost"`
+	LineCost         float64    `json:"line_cost"`
 }
 
 func (s *Server) suppliers(w http.ResponseWriter, r *http.Request) {
@@ -558,7 +560,7 @@ func scanPurchaseOrder(scanner purchaseOrderScanner) (PurchaseOrder, error) {
 
 func (s *Server) purchaseOrderItems(ctx context.Context, poID uint64) ([]PurchaseOrderItem, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT poi.id, poi.po_id, poi.product_id, p.name, p.sku, poi.quantity,
+		SELECT poi.id, poi.po_id, poi.product_id, p.name, p.sku, p.image_url, p.image_updated_at, poi.quantity,
 		       poi.received_quantity, poi.unit_cost, poi.line_cost
 		FROM purchase_order_items poi
 		JOIN products p ON p.id=poi.product_id
@@ -571,8 +573,16 @@ func (s *Server) purchaseOrderItems(ctx context.Context, poID uint64) ([]Purchas
 	items := []PurchaseOrderItem{}
 	for rows.Next() {
 		var item PurchaseOrderItem
-		if err := rows.Scan(&item.ID, &item.POID, &item.ProductID, &item.ProductName, &item.SKU, &item.Quantity, &item.ReceivedQuantity, &item.UnitCost, &item.LineCost); err != nil {
+		var imageURL sql.NullString
+		var imageUpdated sql.NullTime
+		if err := rows.Scan(&item.ID, &item.POID, &item.ProductID, &item.ProductName, &item.SKU, &imageURL, &imageUpdated, &item.Quantity, &item.ReceivedQuantity, &item.UnitCost, &item.LineCost); err != nil {
 			return nil, err
+		}
+		if imageURL.Valid {
+			item.ImageURL = &imageURL.String
+		}
+		if imageUpdated.Valid {
+			item.ImageUpdated = &imageUpdated.Time
 		}
 		items = append(items, item)
 	}

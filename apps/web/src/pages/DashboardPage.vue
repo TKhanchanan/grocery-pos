@@ -12,6 +12,7 @@ import AppIcon from '../components/AppIcon.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import DashboardKpiCard from '../components/DashboardKpiCard.vue'
 import PageHeader from '../components/PageHeader.vue'
+import ProductAvatar from '../components/ProductAvatar.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import type { DashboardSummary, StockReport, StockStatus } from '../types/navigation'
@@ -247,7 +248,8 @@ onMounted(loadDashboard)
     </div>
 
     <template v-if="summary">
-      <div class="relative overflow-hidden rounded-3xl border border-brand-100 bg-gradient-to-br from-brand-600 via-emerald-600 to-sky-600 p-6 text-white shadow-2xl shadow-brand-950/20 dark:border-emerald-400/20 dark:from-emerald-950 dark:via-slate-900 dark:to-sky-950 dark:shadow-black/30">
+      <div
+        class="relative overflow-hidden rounded-3xl border border-brand-100/60 bg-[radial-gradient(circle_at_top_left,rgba(204,251,241,0.35),transparent_26rem),linear-gradient(135deg,#009a9a_0%,#087f83_48%,#104145_100%)] p-6 text-white shadow-2xl shadow-brand-900/20 dark:border-brand-100/10 dark:bg-[radial-gradient(circle_at_top_left,rgba(204,251,241,0.14),transparent_24rem),linear-gradient(135deg,#063b3d_0%,#104145_52%,#020b0c_100%)] dark:shadow-black/30">
         <div class="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/15 blur-3xl" />
         <div class="absolute bottom-0 right-16 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
         <div class="relative grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-center">
@@ -256,13 +258,16 @@ onMounted(loadDashboard)
             <h2 class="mt-2 max-w-2xl text-3xl font-black md:text-4xl">{{ app.t('dashboard.hero.title') }}</h2>
             <p class="mt-3 max-w-2xl text-sm leading-6 text-white/80">{{ app.t('dashboard.hero.description') }}</p>
             <div class="mt-5 flex flex-wrap gap-2">
-              <RouterLink to="/pos" class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-black text-brand-700 shadow-lg dark:bg-emerald-200 dark:text-emerald-950">
+              <RouterLink to="/pos"
+                class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-black text-brand-700 shadow-lg dark:bg-emerald-200 dark:text-emerald-950">
                 <AppIcon name="shopping-cart" :size="18" />{{ app.t('dashboard.hero.pos') }}
               </RouterLink>
-              <RouterLink to="/reports" class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 px-4 text-sm font-black text-white hover:bg-white/10">
+              <RouterLink to="/reports"
+                class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 px-4 text-sm font-black text-white hover:bg-white/10">
                 <AppIcon name="chart-column" :size="18" />{{ app.t('dashboard.hero.reports') }}
               </RouterLink>
-              <RouterLink to="/restock" class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 px-4 text-sm font-black text-white hover:bg-white/10">
+              <RouterLink to="/restock"
+                class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 px-4 text-sm font-black text-white hover:bg-white/10">
                 <AppIcon name="package-plus" :size="18" />{{ app.t('dashboard.hero.restock') }}
               </RouterLink>
             </div>
@@ -288,7 +293,7 @@ onMounted(loadDashboard)
       </div>
 
       <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <AppCard class="dashboard-section">
+        <AppCard class="dashboard-section dark:bg-slate-900/80">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.chart.performanceEyebrow') }}</p>
@@ -315,7 +320,7 @@ onMounted(loadDashboard)
           </div>
         </AppCard>
 
-        <AppCard class="dashboard-section">
+        <AppCard class="dashboard-section dark:bg-slate-900/80">
           <div class="flex items-start justify-between gap-3">
             <div>
               <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.payment.eyebrow') }}</p>
@@ -338,7 +343,7 @@ onMounted(loadDashboard)
       </div>
 
       <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <AppCard class="dashboard-section">
+        <AppCard class="dashboard-section dark:bg-slate-900/80">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.product.eyebrow') }}</p>
@@ -352,6 +357,7 @@ onMounted(loadDashboard)
               <div class="flex items-center justify-between gap-3">
                 <div class="flex min-w-0 items-center gap-3">
                   <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-100 text-sm font-black text-brand-700 dark:bg-emerald-500/20 dark:text-emerald-200">#{{ index + 1 }}</span>
+                  <ProductAvatar :src="product.image_url" :updated-at="product.image_updated_at" :name="product.product_name" size="sm" shape="square" />
                   <div class="min-w-0">
                     <h3 class="truncate font-black">{{ product.product_name }}</h3>
                     <p class="text-sm text-slate-500 dark:text-slate-400">{{ product.sku }}</p>
@@ -369,7 +375,7 @@ onMounted(loadDashboard)
           </div>
         </AppCard>
 
-        <AppCard class="dashboard-section">
+        <AppCard class="dashboard-section dark:bg-slate-900/80">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.inventory.eyebrow') }}</p>
@@ -381,9 +387,12 @@ onMounted(loadDashboard)
           <div v-else class="mt-5 grid gap-3">
             <article v-for="item in stockRiskItems" :key="`${item.product_id}-${item.location_id}`" class="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-950/50">
               <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <h3 class="truncate font-black">{{ item.product_name }}</h3>
-                  <p class="text-sm text-slate-500 dark:text-slate-400">{{ item.location_name }} · {{ item.sku }}</p>
+                <div class="flex min-w-0 items-start gap-3">
+                  <ProductAvatar :src="item.image_url" :updated-at="item.image_updated_at" :name="item.product_name" size="sm" shape="square" />
+                  <div class="min-w-0">
+                    <h3 class="truncate font-black">{{ item.product_name }}</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ item.location_name }} · {{ item.sku }}</p>
+                  </div>
                 </div>
                 <AppBadge :tone="stockTone(item.stock_status)">{{ stockStatusLabel(item.stock_status) }}</AppBadge>
               </div>
@@ -403,7 +412,7 @@ onMounted(loadDashboard)
       </div>
 
       <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <AppCard class="dashboard-section">
+        <AppCard class="dashboard-section dark:bg-slate-900/80">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.activity.eyebrow') }}</p>
@@ -429,7 +438,7 @@ onMounted(loadDashboard)
           </div>
         </AppCard>
 
-        <AppCard class="dashboard-section">
+        <AppCard class="dashboard-section dark:bg-slate-900/80">
           <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.insight.eyebrow') }}</p>
           <h2 class="mt-1 text-xl font-black">{{ app.t('dashboard.insight.title') }}</h2>
           <div class="mt-5 grid gap-3">

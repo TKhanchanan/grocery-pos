@@ -89,8 +89,9 @@ export const useAuthStore = defineStore('auth', () => {
     return codes.every((code) => hasPermission(code))
   }
 
-  function canViewMenu(item: { roles?: Role[]; permission?: PermissionCode }) {
+  function canViewMenu(item: { roles?: Role[]; permission?: PermissionCode; permissions?: PermissionCode[] }) {
     if (item.permission) return hasPermission(item.permission)
+    if (item.permissions) return hasAnyPermission(item.permissions)
     return can(item.roles)
   }
 

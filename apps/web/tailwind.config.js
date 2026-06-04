@@ -11,6 +11,9 @@ export default {
           700: '#087f83',
           900: '#104145'
         }
+      },
+      fontFamily: {
+        sans: ['Sarabun', 'Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
       }
     },
   },

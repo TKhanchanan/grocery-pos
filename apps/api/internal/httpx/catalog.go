@@ -5,7 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -41,11 +44,15 @@ type Product struct {
 	Threshold    int            `json:"threshold"`
 	ReorderPoint int            `json:"reorder_point"`
 	Active       bool           `json:"is_active"`
+	ImageURL     *string        `json:"image_url"`
+	ImageUpdated *time.Time     `json:"image_updated_at"`
 	TotalStock   int            `json:"total_stock"`
 	StockStatus  string         `json:"stock_status"`
 	Stocks       []ProductStock `json:"stocks,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`
 }
+
+const maxProductImageBytes = 2 * 1024 * 1024
 
 type ProductStock struct {
 	ProductID    uint64 `json:"product_id"`
@@ -135,6 +142,31 @@ func (s *Server) categoryDetail(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, category)
 }
 
+func (s *Server) categoryStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(r, "id")
+	if err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid category id.")
+		return
+	}
+	var body struct {
+		Active bool `json:"is_active"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	if _, err := s.db.ExecContext(r.Context(), `UPDATE categories SET active=? WHERE id=?`, body.Active, id); err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, "UPDATE_CATEGORY_STATUS_FAILED", "Could not update category status.")
+		return
+	}
+	category, err := s.categoryByID(r.Context(), id)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusNotFound, "NOT_FOUND", "Category not found.")
+		return
+	}
+	response.JSON(w, http.StatusOK, category)
+}
+
 func (s *Server) products(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -215,6 +247,125 @@ func (s *Server) productStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, product)
+}
+
+func (s *Server) productImage(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(r, "id")
+	if err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid product id.")
+		return
+	}
+	if _, err := s.productByID(r.Context(), id); err != nil {
+		response.ErrorJSON(w, http.StatusNotFound, "NOT_FOUND", "Product not found.")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		s.uploadProductImage(w, r, id)
+	case http.MethodDelete:
+		s.deleteProductImage(w, r, id)
+	default:
+		response.ErrorJSON(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.")
+	}
+}
+
+func (s *Server) uploadProductImage(w http.ResponseWriter, r *http.Request, id uint64) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxProductImageBytes+1024)
+	if err := r.ParseMultipartForm(maxProductImageBytes); err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, "PRODUCT_IMAGE_TOO_LARGE", "Product image must be 2MB or smaller.")
+		return
+	}
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, "PRODUCT_IMAGE_REQUIRED", "Choose a product image to upload.")
+		return
+	}
+	defer file.Close()
+
+	mime, ext, err := detectProductImageType(file)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, "INVALID_PRODUCT_IMAGE_TYPE", err.Error())
+		return
+	}
+	if header.Size > maxProductImageBytes {
+		response.ErrorJSON(w, http.StatusBadRequest, "PRODUCT_IMAGE_TOO_LARGE", "Product image must be 2MB or smaller.")
+		return
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "PRODUCT_IMAGE_UPLOAD_FAILED", "Could not read product image.")
+		return
+	}
+
+	dir := filepath.Join(s.cfg.UploadDir, "products")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "PRODUCT_IMAGE_UPLOAD_FAILED", "Could not prepare upload storage.")
+		return
+	}
+	name := fmt.Sprintf("%d-%s%s", id, randomHex(12), ext)
+	path := filepath.Join(dir, name)
+	out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "PRODUCT_IMAGE_UPLOAD_FAILED", "Could not save product image.")
+		return
+	}
+	if _, err := io.Copy(out, file); err != nil {
+		_ = out.Close()
+		_ = os.Remove(path)
+		response.ErrorJSON(w, http.StatusInternalServerError, "PRODUCT_IMAGE_UPLOAD_FAILED", "Could not save product image.")
+		return
+	}
+	_ = out.Close()
+
+	oldPath := productImagePath(r.Context(), s.db, id)
+	imageURL := "/uploads/products/" + name
+	if _, err := s.db.ExecContext(r.Context(), `UPDATE products SET image_url=?, image_path=?, image_updated_at=? WHERE id=?`, imageURL, path, time.Now(), id); err != nil {
+		_ = os.Remove(path)
+		response.ErrorJSON(w, http.StatusInternalServerError, "PRODUCT_IMAGE_UPLOAD_FAILED", "Could not update product image.")
+		return
+	}
+	removeAvatarFile(oldPath)
+	product, _ := s.productByID(r.Context(), id)
+	response.JSON(w, http.StatusOK, map[string]any{
+		"product":      product,
+		"content_type": mime,
+	})
+}
+
+func (s *Server) deleteProductImage(w http.ResponseWriter, r *http.Request, id uint64) {
+	oldPath := productImagePath(r.Context(), s.db, id)
+	if _, err := s.db.ExecContext(r.Context(), `UPDATE products SET image_url=NULL, image_path=NULL, image_updated_at=NULL WHERE id=?`, id); err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "PRODUCT_IMAGE_DELETE_FAILED", "Could not remove product image.")
+		return
+	}
+	removeAvatarFile(oldPath)
+	product, _ := s.productByID(r.Context(), id)
+	response.JSON(w, http.StatusOK, product)
+}
+
+func detectProductImageType(file multipartSeekReader) (string, string, error) {
+	buf := make([]byte, 512)
+	n, _ := file.Read(buf)
+	mime := http.DetectContentType(buf[:n])
+	switch mime {
+	case "image/jpeg":
+		return mime, ".jpg", nil
+	case "image/png":
+		return mime, ".png", nil
+	case "image/webp":
+		return mime, ".webp", nil
+	default:
+		return "", "", errors.New("Only JPG, PNG, and WEBP product images are supported.")
+	}
+}
+
+func productImagePath(ctx context.Context, db *sql.DB, productID uint64) string {
+	var path sql.NullString
+	_ = db.QueryRowContext(ctx, `SELECT image_path FROM products WHERE id=?`, productID).Scan(&path)
+	if path.Valid {
+		return path.String
+	}
+	return ""
 }
 
 func (s *Server) locations(w http.ResponseWriter, r *http.Request) {
@@ -404,7 +555,8 @@ func (s *Server) listProducts(ctx context.Context, r *http.Request) ([]Product, 
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT p.id, p.sku, p.name, p.barcode, p.category_id, c.name, p.price, p.cost,
-		       p.unit, p.threshold, p.reorder_point, p.active, COALESCE(SUM(ps.quantity), 0), p.created_at
+		       p.unit, p.threshold, p.reorder_point, p.active, p.image_url, p.image_updated_at,
+		       COALESCE(SUM(ps.quantity), 0), p.created_at
 		FROM products p
 		LEFT JOIN categories c ON c.id=p.category_id
 		LEFT JOIN product_stocks ps ON ps.product_id=p.id
@@ -469,7 +621,8 @@ func (s *Server) updateProduct(ctx context.Context, id uint64, body productInput
 func (s *Server) productByID(ctx context.Context, id uint64) (Product, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT p.id, p.sku, p.name, p.barcode, p.category_id, c.name, p.price, p.cost,
-		       p.unit, p.threshold, p.reorder_point, p.active, COALESCE(SUM(ps.quantity), 0), p.created_at
+		       p.unit, p.threshold, p.reorder_point, p.active, p.image_url, p.image_updated_at,
+		       COALESCE(SUM(ps.quantity), 0), p.created_at
 		FROM products p
 		LEFT JOIN categories c ON c.id=p.category_id
 		LEFT JOIN product_stocks ps ON ps.product_id=p.id
@@ -496,8 +649,16 @@ type productScanner interface {
 
 func scanProduct(scanner productScanner) (Product, error) {
 	var product Product
-	if err := scanner.Scan(&product.ID, &product.SKU, &product.Name, &product.Barcode, &product.CategoryID, &product.CategoryName, &product.SellingPrice, &product.UnitCost, &product.Unit, &product.Threshold, &product.ReorderPoint, &product.Active, &product.TotalStock, &product.CreatedAt); err != nil {
+	var imageURL sql.NullString
+	var imageUpdated sql.NullTime
+	if err := scanner.Scan(&product.ID, &product.SKU, &product.Name, &product.Barcode, &product.CategoryID, &product.CategoryName, &product.SellingPrice, &product.UnitCost, &product.Unit, &product.Threshold, &product.ReorderPoint, &product.Active, &imageURL, &imageUpdated, &product.TotalStock, &product.CreatedAt); err != nil {
 		return Product{}, err
+	}
+	if imageURL.Valid {
+		product.ImageURL = &imageURL.String
+	}
+	if imageUpdated.Valid {
+		product.ImageUpdated = &imageUpdated.Time
 	}
 	product.StockStatus = stockStatus(product.TotalStock, product.Threshold, product.ReorderPoint)
 	return product, nil

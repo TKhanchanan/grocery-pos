@@ -13,12 +13,15 @@ import AppModal from '../components/AppModal.vue'
 import AppSelect from '../components/AppSelect.vue'
 import PageHeader from '../components/PageHeader.vue'
 import POSCartPanel from '../components/POSCartPanel.vue'
+import ProductAvatar from '../components/ProductAvatar.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
+import { useAuthStore } from '../stores/auth'
 import { useCartStore } from '../stores/cart'
 import type { Location, POSProduct, Receipt, StockStatus } from '../types/navigation'
 
 const app = useAppStore()
+const auth = useAuthStore()
 const cart = useCartStore()
 const locations = ref<Location[]>([])
 const products = ref<POSProduct[]>([])
@@ -37,7 +40,8 @@ let loadTimer: number | undefined
 
 const selectedLocation = computed(() => locations.value.find((location) => location.id === Number(selectedLocationID.value)) ?? null)
 const canSubmit = computed(() => cart.items.length > 0 && cart.receivedAmount >= cart.totalAmount && !cart.isSubmitting)
-const receiptPath = computed(() => successReceipt.value ? `/receipt-detail?id=${successReceipt.value.id}` : '/receipt-detail')
+const canViewReceipt = computed(() => auth.hasPermission('sales.receipt.view'))
+const receiptPath = computed(() => successReceipt.value ? `/sales/${successReceipt.value.id}/receipt` : '/receipt-detail')
 const scannerMessage = computed(() => app.t(scannerMessageKey.value))
 const productCountLabel = computed(() => t('pos.productsCount', { count: products.value.length }))
 
@@ -226,7 +230,7 @@ onBeforeUnmount(() => {
 
     <div class="grid w-full items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
       <div class="grid gap-4">
-        <AppCard hover>
+        <AppCard hover class="dark:bg-slate-900/80">
           <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('pos.controlTitle') }}</p>
@@ -272,11 +276,11 @@ onBeforeUnmount(() => {
               class="pos-product-card premium-card-hover flex h-full flex-col rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/60"
               :class="product.stock <= 0 ? 'opacity-65 grayscale' : ''"
             >
+              <div class="mb-3 aspect-[4/3] w-full overflow-hidden">
+                <ProductAvatar :src="product.image_url" :updated-at="product.image_updated_at" :name="product.name" size="full" shape="square" :muted="product.stock <= 0" />
+              </div>
               <div class="flex items-start gap-3">
                 <div class="flex min-w-0 flex-1 items-start gap-3">
-                  <div class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-100 text-brand-700 dark:bg-emerald-500/20 dark:text-emerald-100">
-                    <AppIcon name="package" />
-                  </div>
                   <div class="min-w-0">
                     <h2 class="pos-product-name font-black">{{ product.name }}</h2>
                     <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ product.sku }}<span v-if="product.barcode"> · {{ product.barcode }}</span></p>
@@ -353,7 +357,7 @@ onBeforeUnmount(() => {
         </dl>
         <div class="flex justify-end gap-2">
           <AppButton variant="secondary" @click="successReceipt = null">{{ app.t('pos.continueSelling') }}</AppButton>
-          <RouterLink :to="receiptPath" class="focus-ring inline-flex min-h-11 items-center justify-center rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm shadow-brand-600/20 dark:bg-emerald-500 dark:text-slate-950">
+          <RouterLink v-if="canViewReceipt" :to="receiptPath" class="focus-ring inline-flex min-h-11 items-center justify-center rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm shadow-brand-600/20 dark:bg-emerald-500 dark:text-slate-950">
             {{ app.t('pos.viewReceipt') }}
           </RouterLink>
         </div>
