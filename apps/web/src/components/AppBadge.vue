@@ -6,7 +6,7 @@ withDefaults(defineProps<{ tone?: 'brand' | 'success' | 'warning' | 'danger' | '
 
 <template>
   <span
-    class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold"
+    class="inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold"
     :class="{
       'bg-brand-100 text-brand-700 dark:bg-emerald-500/20 dark:text-emerald-100': tone === 'brand' || tone === 'success',
       'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-100': tone === 'warning',

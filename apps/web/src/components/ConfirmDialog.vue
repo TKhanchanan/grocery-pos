@@ -20,8 +20,8 @@ defineEmits<{ close: []; confirm: [] }>()
 
 <template>
   <AppModal :open="open" :title="title ?? 'Please confirm'" @close="$emit('close')">
-    <p class="text-sm text-slate-600">{{ message ?? 'Are you sure you want to continue?' }}</p>
-    <p v-if="consequence" class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">{{ consequence }}</p>
+    <p class="text-sm text-slate-600 dark:text-slate-300">{{ message ?? 'Are you sure you want to continue?' }}</p>
+    <p v-if="consequence" class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">{{ consequence }}</p>
     <div class="mt-3">
       <slot />
     </div>

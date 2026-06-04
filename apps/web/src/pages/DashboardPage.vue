@@ -186,9 +186,19 @@ const paymentChartOptions = computed<ApexOptions>(() => ({
         size: '72%',
         labels: {
           show: true,
+          name: {
+            color: app.isDark ? '#cbd5e1' : '#475569',
+            fontWeight: 800,
+          },
+          value: {
+            color: app.isDark ? '#f8fafc' : '#0f172a',
+            fontWeight: 900,
+          },
           total: {
             show: true,
             label: app.t('dashboard.chart.revenue'),
+            color: app.isDark ? '#cbd5e1' : '#475569',
+            fontWeight: 800,
             formatter: () => moneyAmount(paymentTotal.value),
           },
         },
