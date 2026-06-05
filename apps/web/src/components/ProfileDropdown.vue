@@ -146,7 +146,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocumentClick)
           </div>
         </dl>
 
-        <div class="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+        <div>
           <p class="font-bold">อัปโหลดรูปโปรไฟล์</p>
           <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">รองรับ JPG, PNG, WEBP ขนาดไม่เกิน 2MB</p>
           <input ref="fileInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp" @change="uploadAvatar(($event.target as HTMLInputElement).files?.[0])" />

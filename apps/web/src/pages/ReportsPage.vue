@@ -383,7 +383,7 @@ onMounted(async () => {
             <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('reports.filters') }}</p>
             <h2 class="text-lg font-black text-slate-950 dark:text-slate-50">{{ app.t(active.labelKey) }}</h2>
           </div>
-          <AppBadge tone="info">{{ app.t('reports.reportCenter') }}</AppBadge>
+          <!-- <AppBadge tone="info">{{ app.t('reports.reportCenter') }}</AppBadge> -->
         </div>
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto]">
           <AppInput v-model="filters.date_from" :label="app.t('reports.dateFrom')" type="date" :disabled="isStockReport" />
@@ -414,9 +414,8 @@ onMounted(async () => {
       <AppEmptyState v-else-if="rows.length === 0" :title="app.t('reports.empty')" :description="app.t('reports.emptyDescription')" icon="chart-column" />
 
       <AppCard v-else class="dark:bg-slate-900/80">
-        <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('reports.rows') }}</p>
             <h2 class="text-lg font-black text-slate-950 dark:text-slate-50">{{ app.t(active.labelKey) }}</h2>
           </div>
           <div class="flex flex-wrap items-center gap-2 sm:justify-end">

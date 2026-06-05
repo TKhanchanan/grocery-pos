@@ -284,8 +284,8 @@ onMounted(loadDashboard)
       </div>
 
       <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <DashboardKpiCard class="xl:col-span-2" :label="app.t('dashboard.kpi.todaySales')" :value="summary.today_sales" :decimals="2" :locale="locale" :suffix="currencySuffix" :helper="app.t('dashboard.helper.revenueCompleted')" :trend="app.t('dashboard.trend.livePos')" icon="banknote" tone="success" />
-        <DashboardKpiCard class="xl:col-span-2" :label="app.t('dashboard.kpi.monthProfit')" :value="summary.gross_profit_this_month" :decimals="2" :locale="locale" :suffix="currencySuffix" :helper="app.t('dashboard.helper.cancelledExcluded')" :trend="app.t('dashboard.trend.snapshot')" icon="chart-column" tone="info" />
+        <DashboardKpiCard class="xl:col-span-2" :label="app.t('dashboard.kpi.todaySales')" :value="summary.today_sales" :decimals="2" :locale="locale" :suffix="currencySuffix" :helper="app.t('dashboard.helper.revenueCompleted')" icon="banknote" tone="success" />
+        <DashboardKpiCard class="xl:col-span-2" :label="app.t('dashboard.kpi.monthProfit')" :value="summary.gross_profit_this_month" :decimals="2" :locale="locale" :suffix="currencySuffix" :helper="app.t('dashboard.helper.cancelledExcluded')" icon="chart-column" tone="info" />
         <DashboardKpiCard class="xl:col-span-2" :label="app.t('dashboard.kpi.topProduct')" :text-value="summary.top_product_this_month?.product_name ?? app.t('dashboard.empty.noTopProduct')" :helper="summary.top_product_this_month ? t('dashboard.helper.soldThisMonth', { quantity: summary.top_product_this_month.quantity }) : app.t('dashboard.helper.noSalesYet')" icon="package" tone="brand" />
         <DashboardKpiCard class="xl:col-span-2" :label="app.t('dashboard.kpi.pendingAlerts')" :value="alertTotal" :locale="locale" :helper="t('dashboard.helper.alertBreakdown', { out: summary.out_of_stock_count, low: summary.low_stock_count })" icon="bell" tone="warning" />
         <DashboardKpiCard class="xl:col-span-2" :label="app.t('dashboard.kpi.receiptsToday')" :value="summary.today_receipts" :locale="locale" :helper="app.t('dashboard.helper.receiptsCompleted')" icon="receipt-text" tone="success" />
@@ -327,7 +327,7 @@ onMounted(loadDashboard)
               <h2 class="mt-1 text-xl font-black">{{ app.t('dashboard.payment.title') }}</h2>
               <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ t('dashboard.payment.summary', { count: paymentReceiptCount, amount: money(paymentTotal) }) }}</p>
             </div>
-            <AppBadge tone="info">{{ app.t('dashboard.payment.live') }}</AppBadge>
+            <AppBadge tone="success">{{ app.t('dashboard.payment.live') }}</AppBadge>
           </div>
           <div v-if="paymentSeries.length" class="mt-5">
             <VueApexCharts height="270" type="donut" :options="paymentChartOptions" :series="paymentSeries" />
@@ -346,8 +346,8 @@ onMounted(loadDashboard)
         <AppCard class="dashboard-section dark:bg-slate-900/80">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.product.eyebrow') }}</p>
-              <h2 class="mt-1 text-xl font-black">{{ app.t('dashboard.product.title') }}</h2>
+              <!-- <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.product.eyebrow') }}</p> -->
+              <h2 class="text-xl font-black">{{ app.t('dashboard.product.title') }}</h2>
             </div>
             <RouterLink to="/reports" class="text-sm font-black text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.product.viewReport') }}</RouterLink>
           </div>
@@ -378,8 +378,8 @@ onMounted(loadDashboard)
         <AppCard class="dashboard-section dark:bg-slate-900/80">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.inventory.eyebrow') }}</p>
-              <h2 class="mt-1 text-xl font-black">{{ app.t('dashboard.inventory.title') }}</h2>
+              <!-- <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.inventory.eyebrow') }}</p> -->
+              <h2 class="text-xl font-black">{{ app.t('dashboard.inventory.title') }}</h2>
             </div>
             <RouterLink to="/alerts" class="text-sm font-black text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.inventory.openAlerts') }}</RouterLink>
           </div>
@@ -415,8 +415,8 @@ onMounted(loadDashboard)
         <AppCard class="dashboard-section dark:bg-slate-900/80">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.activity.eyebrow') }}</p>
-              <h2 class="mt-1 text-xl font-black">{{ app.t('dashboard.activity.title') }}</h2>
+              <!-- <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.activity.eyebrow') }}</p> -->
+              <h2 class="text-xl font-black">{{ app.t('dashboard.activity.title') }}</h2>
             </div>
             <RouterLink to="/sales-history" class="text-sm font-black text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.activity.viewAll') }}</RouterLink>
           </div>
