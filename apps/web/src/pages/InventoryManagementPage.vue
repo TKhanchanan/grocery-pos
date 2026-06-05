@@ -9,6 +9,7 @@ import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import AppModal from '../components/AppModal.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import AppSelect from '../components/AppSelect.vue'
 import AppTabs from '../components/AppTabs.vue'
 import AppTextarea from '../components/AppTextarea.vue'
@@ -20,6 +21,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { Location, Product, ProductStock, StockTransfer } from '../types/navigation'
+import { formatThaiDateTime } from '../utils/date'
 
 type InventoryTab = 'locations' | 'transfers'
 type TransferAction = 'complete' | 'cancel'
@@ -127,8 +129,7 @@ function friendlyError(err: unknown, fallback: TranslationKey) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return '-'
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  return formatThaiDateTime(value)
 }
 
 function stockAt(productID: number, locationID: number) {
@@ -163,8 +164,8 @@ function setActiveTab(tab: InventoryTab) {
   router.replace({ path: '/inventory-management', query: { ...route.query, tab } })
 }
 
-function setTransferPageSize(value: string) {
-  transferPageSize.value = Number(value)
+function setTransferPageSize(value: number) {
+  transferPageSize.value = value
   transferPage.value = 1
 }
 
@@ -514,11 +515,7 @@ onMounted(() => {
           <div class="flex flex-col gap-3 border-t border-slate-100 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-2">
               <span class="text-slate-500 dark:text-slate-400">{{ app.t('inventory.show') }}</span>
-              <AppSelect :model-value="transferPageSize" hide-arrow @update:model-value="setTransferPageSize">
-                <option :value="10">10</option>
-                <option :value="20">20</option>
-                <option :value="50">50</option>
-              </AppSelect>
+              <AppPageSizeSelect :model-value="transferPageSize" @update:model-value="setTransferPageSize" />
               <span class="text-slate-500 dark:text-slate-400">{{ app.t('inventory.perPage') }}</span>
             </div>
             <div class="flex items-center justify-end gap-2">

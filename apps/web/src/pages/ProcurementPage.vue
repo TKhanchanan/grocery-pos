@@ -9,6 +9,7 @@ import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import AppModal from '../components/AppModal.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import AppSelect from '../components/AppSelect.vue'
 import AppTabs from '../components/AppTabs.vue'
 import AppTextarea from '../components/AppTextarea.vue'
@@ -20,6 +21,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { Location, Product, PurchaseOrder, PurchaseOrderItem, Supplier } from '../types/navigation'
+import { formatThaiDateTime } from '../utils/date'
 
 type ProcurementTab = 'purchase-orders' | 'suppliers'
 type POAction = 'send' | 'receive' | 'cancel'
@@ -121,8 +123,7 @@ function money(value: number) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return '-'
-  return new Date(value).toLocaleString(locale.value)
+  return formatThaiDateTime(value)
 }
 
 function friendlyError(err: unknown, fallback: TranslationKey) {
@@ -433,13 +434,13 @@ async function refreshActiveTab() {
   if (activeTab.value === 'suppliers') await loadSuppliers()
 }
 
-function changePOPageSize(value: string) {
-  poPageSize.value = Number(value)
+function changePOPageSize(value: number) {
+  poPageSize.value = value
   poPage.value = 1
 }
 
-function changeSupplierPageSize(value: string) {
-  supplierPageSize.value = Number(value)
+function changeSupplierPageSize(value: number) {
+  supplierPageSize.value = value
   supplierPage.value = 1
 }
 
@@ -471,7 +472,6 @@ watch(() => route.query.tab, alignTabWithRoute)
             <h2 class="text-xl font-black text-slate-950 dark:text-slate-50">{{ app.t('procurement.purchaseOrders') }}</h2>
           </div>
           <div class="flex flex-wrap gap-2">
-            <AppButton variant="secondary" icon="history" @click="loadPurchaseOrders">{{ app.t('procurement.refresh') }}</AppButton>
             <AppButton v-if="canCreatePO" icon="plus" @click="openCreatePO">{{ app.t('procurement.createPO') }}</AppButton>
           </div>
         </div>
@@ -553,11 +553,7 @@ watch(() => route.query.tab, alignTabWithRoute)
             <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-slate-500 dark:text-slate-400">{{ app.t('procurement.show') }}</span>
-                <AppSelect :model-value="poPageSize" hide-arrow @update:model-value="changePOPageSize">
-                  <option value="10">10</option>
-                  <option value="20">20</option>
-                  <option value="50">50</option>
-                </AppSelect>
+                <AppPageSizeSelect :model-value="poPageSize" @update:model-value="changePOPageSize" />
                 <span class="text-slate-500 dark:text-slate-400">{{ app.t('procurement.perPage') }}</span>
                 <span class="text-slate-500 dark:text-slate-400">{{ app.t('procurement.totalRows') }} {{ purchaseOrders.length.toLocaleString(locale) }}</span>
               </div>
@@ -577,7 +573,6 @@ watch(() => route.query.tab, alignTabWithRoute)
             <h2 class="text-xl font-black text-slate-950 dark:text-slate-50">{{ app.t('procurement.suppliers') }}</h2>
           </div>
           <div class="flex flex-wrap gap-2">
-            <AppButton variant="secondary" icon="history" @click="loadSuppliers">{{ app.t('procurement.refresh') }}</AppButton>
             <AppButton v-if="canCreateSupplier" icon="plus" @click="openCreateSupplier">{{ app.t('procurement.addSupplier') }}</AppButton>
           </div>
         </div>
@@ -647,11 +642,7 @@ watch(() => route.query.tab, alignTabWithRoute)
             <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-slate-500 dark:text-slate-400">{{ app.t('procurement.show') }}</span>
-                <AppSelect :model-value="supplierPageSize" hide-arrow @update:model-value="changeSupplierPageSize">
-                  <option value="10">10</option>
-                  <option value="20">20</option>
-                  <option value="50">50</option>
-                </AppSelect>
+                <AppPageSizeSelect :model-value="supplierPageSize" @update:model-value="changeSupplierPageSize" />
                 <span class="text-slate-500 dark:text-slate-400">{{ app.t('procurement.perPage') }}</span>
                 <span class="text-slate-500 dark:text-slate-400">{{ app.t('procurement.totalRows') }} {{ suppliers.length.toLocaleString(locale) }}</span>
               </div>

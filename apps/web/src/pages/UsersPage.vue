@@ -200,7 +200,6 @@ onMounted(loadUsers)
   <section>
     <PageHeader :title="app.t('users.title')" :eyebrow="app.t('users.eyebrow')" :description="app.t('users.description')" icon="users">
       <div class="flex flex-wrap gap-2">
-        <AppButton variant="secondary" icon="history" @click="loadUsers">{{ app.t('users.refresh') }}</AppButton>
         <AppButton v-if="canCreate" icon="plus" @click="openCreate">{{ app.t('users.add') }}</AppButton>
       </div>
     </PageHeader>

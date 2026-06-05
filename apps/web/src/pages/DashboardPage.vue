@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ApexOptions } from 'apexcharts'
 import VueApexCharts from 'vue3-apexcharts'
 import { RouterLink } from 'vue-router'
@@ -16,6 +16,7 @@ import ProductAvatar from '../components/ProductAvatar.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import type { DashboardSummary, StockReport, StockStatus } from '../types/navigation'
+import { formatThaiDateTime, thaiLocale } from '../utils/date'
 
 type Period = '7D' | '30D' | 'MONTH'
 
@@ -24,6 +25,7 @@ const summary = ref<DashboardSummary | null>(null)
 const loading = ref(false)
 const error = ref('')
 const period = ref<Period>('7D')
+let liveRefreshTimer: number | undefined
 
 const periods: Array<{ value: Period; labelKey: TranslationKey }> = [
   { value: '7D', labelKey: 'dashboard.period.7d' },
@@ -77,7 +79,12 @@ function stockTone(status: StockStatus) {
 
 function stockProgress(item: StockReport) {
   const target = Math.max(item.threshold, item.reorder_point, item.quantity, 1)
-  return Math.max(5, Math.min(100, Math.round((item.quantity / target) * 100)))
+  return Math.max(item.quantity > 0 ? 8 : 2, Math.min(100, Math.round((item.quantity / target) * 100)))
+}
+
+function topProductProgress(quantity: number) {
+  if (topProductMax.value <= 0 || quantity <= 0) return 2
+  return Math.max(10, Math.min(100, Math.round((quantity / topProductMax.value) * 100)))
 }
 
 function periodDays() {
@@ -91,7 +98,7 @@ function dateKey(date: Date) {
 }
 
 function shortDate(key: string) {
-  return new Date(`${key}T00:00:00`).toLocaleDateString(locale.value, { day: '2-digit', month: 'short' })
+  return new Intl.DateTimeFormat(thaiLocale(), { day: '2-digit', month: 'short' }).format(new Date(`${key}T00:00:00`))
 }
 
 function stockStatusLabel(status: StockStatus) {
@@ -142,14 +149,14 @@ const salesChartOptions = computed<ApexOptions>(() => ({
     animations: { enabled: true, speed: 650, dynamicAnimation: { enabled: true, speed: 450 } },
     foreColor: app.isDark ? '#cbd5e1' : '#475569',
   },
-  colors: ['#16a34a', '#0ea5e9'],
+  colors: app.isDark ? ['#5eead4', '#fbbf24'] : ['#0f766e', '#ea580c'],
   dataLabels: { enabled: false },
   stroke: { curve: 'smooth', width: 3 },
   fill: {
     type: 'gradient',
     gradient: { shadeIntensity: 0.8, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 80, 100] },
   },
-  grid: { borderColor: app.isDark ? '#334155' : '#e2e8f0', strokeDashArray: 4 },
+  grid: { borderColor: app.isDark ? '#475569' : '#cbd5e1', strokeDashArray: 4 },
   legend: { position: 'top', horizontalAlign: 'right', fontWeight: 700 },
   xaxis: { categories: salesTrend.value.labels, axisBorder: { show: false }, axisTicks: { show: false } },
   yaxis: {
@@ -167,7 +174,7 @@ const salesSeries = computed(() => [
 
 const receiptChartOptions = computed<ApexOptions>(() => ({
   chart: { type: 'bar', toolbar: { show: false }, sparkline: { enabled: true }, animations: { enabled: true, speed: 700 } },
-  colors: ['#16a34a'],
+  colors: [app.isDark ? '#5eead4' : '#0f766e'],
   plotOptions: { bar: { borderRadius: 7, columnWidth: '52%' } },
   tooltip: { y: { formatter: (value) => t('dashboard.chart.receiptTooltip', { count: Number(value).toLocaleString(locale.value) }) } },
 }))
@@ -177,7 +184,7 @@ const receiptSeries = computed(() => [{ name: app.t('dashboard.chart.receipts'),
 const paymentChartOptions = computed<ApexOptions>(() => ({
   chart: { type: 'donut', animations: { enabled: true, speed: 700 } },
   labels: (summary.value?.payment_method_summary ?? []).map((item) => paymentMethodLabel(item.payment_method)),
-  colors: ['#16a34a', '#0ea5e9', '#f59e0b', '#ef4444'],
+  colors: app.isDark ? ['#5eead4', '#fbbf24', '#93c5fd', '#fb7185'] : ['#0f766e', '#ea580c', '#2563eb', '#dc2626'],
   dataLabels: { enabled: false },
   legend: { show: false },
   stroke: { width: 0 },
@@ -223,14 +230,19 @@ async function loadDashboard() {
   }
 }
 
-onMounted(loadDashboard)
+onMounted(() => {
+  loadDashboard()
+  liveRefreshTimer = window.setInterval(loadDashboard, 15000)
+})
+
+onBeforeUnmount(() => {
+  if (liveRefreshTimer) window.clearInterval(liveRefreshTimer)
+})
 </script>
 
 <template>
   <section class="dashboard-page">
-    <PageHeader :title="app.t('dashboard.title')" :eyebrow="app.t('dashboard.eyebrow')" :description="app.t('dashboard.description')" icon="layout-dashboard">
-      <AppButton variant="secondary" icon="history" :loading="loading" @click="loadDashboard">{{ app.t('dashboard.refresh') }}</AppButton>
-    </PageHeader>
+    <PageHeader :title="app.t('dashboard.title')" :eyebrow="app.t('dashboard.eyebrow')" :description="app.t('dashboard.description')" icon="layout-dashboard" />
 
     <div v-if="error" class="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -249,9 +261,7 @@ onMounted(loadDashboard)
 
     <template v-if="summary">
       <div
-        class="relative overflow-hidden rounded-3xl border border-brand-100/60 bg-[radial-gradient(circle_at_top_left,rgba(204,251,241,0.35),transparent_26rem),linear-gradient(135deg,#009a9a_0%,#087f83_48%,#104145_100%)] p-6 text-white shadow-2xl shadow-brand-900/20 dark:border-brand-100/10 dark:bg-[radial-gradient(circle_at_top_left,rgba(204,251,241,0.14),transparent_24rem),linear-gradient(135deg,#063b3d_0%,#104145_52%,#020b0c_100%)] dark:shadow-black/30">
-        <div class="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/15 blur-3xl" />
-        <div class="absolute bottom-0 right-16 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
+        class="relative overflow-hidden rounded-3xl bg-[radial-gradient(circle_at_top_left,rgba(204,251,241,0.35),transparent_26rem),linear-gradient(135deg,#009a9a_0%,#087f83_48%,#104145_100%)] p-6 text-white shadow-2xl shadow-brand-900/20 dark:bg-[linear-gradient(135deg,#0f172a_0%,#115e59_48%,#312e81_100%)] dark:shadow-black/30">
         <div class="relative grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-center">
           <div>
             <p class="text-sm font-black uppercase text-white/75">{{ app.t('dashboard.hero.eyebrow') }}</p>
@@ -272,7 +282,7 @@ onMounted(loadDashboard)
               </RouterLink>
             </div>
           </div>
-          <div class="rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur">
+          <div class="rounded-2xl bg-white/10 p-4 shadow-xl shadow-slate-950/10 backdrop-blur">
             <div class="flex items-center justify-between">
               <span class="text-sm font-bold text-white/75">{{ app.t('dashboard.todayReceipts') }}</span>
               <AppIcon name="receipt-text" />
@@ -327,7 +337,7 @@ onMounted(loadDashboard)
               <h2 class="mt-1 text-xl font-black">{{ app.t('dashboard.payment.title') }}</h2>
               <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ t('dashboard.payment.summary', { count: paymentReceiptCount, amount: money(paymentTotal) }) }}</p>
             </div>
-            <AppBadge tone="success">{{ app.t('dashboard.payment.live') }}</AppBadge>
+            <AppBadge tone="success"><span class="mr-1.5 h-2 w-2 rounded-full bg-current animate-pulse" />{{ app.t('dashboard.payment.live') }}</AppBadge>
           </div>
           <div v-if="paymentSeries.length" class="mt-5">
             <VueApexCharts height="270" type="donut" :options="paymentChartOptions" :series="paymentSeries" />
@@ -353,7 +363,7 @@ onMounted(loadDashboard)
           </div>
           <AppEmptyState v-if="summary.top_products.length === 0" class="mt-4" :title="app.t('dashboard.empty.noProductSalesTitle')" :description="app.t('dashboard.empty.noProductSalesDescription')" />
           <div v-else class="mt-5 grid gap-3">
-            <article v-for="(product, index) in summary.top_products.slice(0, 6)" :key="product.product_id" class="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-950/50">
+            <article v-for="(product, index) in summary.top_products.slice(0, 6)" :key="product.product_id" class="nested-border-card rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-950/50">
               <div class="flex items-center justify-between gap-3">
                 <div class="flex min-w-0 items-center gap-3">
                   <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-100 text-sm font-black text-brand-700 dark:bg-emerald-500/20 dark:text-emerald-200">#{{ index + 1 }}</span>
@@ -369,7 +379,7 @@ onMounted(loadDashboard)
                 </div>
               </div>
               <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                <div class="h-full rounded-full bg-gradient-to-r from-brand-500 to-sky-400 transition-all duration-700" :style="{ width: `${Math.max(8, Math.round((product.quantity / topProductMax) * 100))}%` }" />
+                <div class="h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-400 to-amber-400 transition-all duration-700 dark:from-teal-300 dark:via-emerald-300 dark:to-amber-300" :style="{ width: `${topProductProgress(product.quantity)}%` }" />
               </div>
             </article>
           </div>
@@ -385,7 +395,7 @@ onMounted(loadDashboard)
           </div>
           <AppEmptyState v-if="stockRiskItems.length === 0" class="mt-4" :title="app.t('dashboard.empty.stockHealthyTitle')" :description="app.t('dashboard.empty.stockHealthyDescription')" />
           <div v-else class="mt-5 grid gap-3">
-            <article v-for="item in stockRiskItems" :key="`${item.product_id}-${item.location_id}`" class="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-950/50">
+            <article v-for="item in stockRiskItems" :key="`${item.product_id}-${item.location_id}`" class="nested-border-card rounded-2xl border p-4">
               <div class="flex items-start justify-between gap-3">
                 <div class="flex min-w-0 items-start gap-3">
                   <ProductAvatar :src="item.image_url" :updated-at="item.image_updated_at" :name="item.product_name" size="sm" shape="square" />
@@ -422,12 +432,12 @@ onMounted(loadDashboard)
           </div>
           <AppEmptyState v-if="recentSales.length === 0" class="mt-4" :title="app.t('dashboard.empty.noSalesTitle')" :description="app.t('dashboard.empty.noSalesDescription')" />
           <div v-else class="mt-5 grid gap-3">
-            <article v-for="sale in recentSales" :key="sale.id" class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/70 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700 dark:bg-slate-950/50">
+            <article v-for="sale in recentSales" :key="sale.id" class="nested-border-card flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/70 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700 dark:bg-slate-950/50">
               <div class="flex min-w-0 items-center gap-3">
                 <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brand-100 text-brand-700 dark:bg-emerald-500/20 dark:text-emerald-200"><AppIcon name="receipt-text" /></span>
                 <div class="min-w-0">
                   <p class="truncate font-black">{{ sale.receipt_no }}</p>
-                  <p class="text-sm text-slate-500 dark:text-slate-400">{{ sale.cashier_name }} · {{ new Date(sale.created_at).toLocaleString(locale) }}</p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">{{ sale.cashier_name }} · {{ formatThaiDateTime(sale.created_at) }}</p>
                 </div>
               </div>
               <div class="flex items-center justify-between gap-3 sm:block sm:text-right">

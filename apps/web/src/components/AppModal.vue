@@ -2,8 +2,10 @@
 import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
 
-const props = withDefaults(defineProps<{ open: boolean; title?: string; description?: string; closeLabel?: string; size?: 'md' | 'lg' | 'xl' }>(), {
+const props = withDefaults(defineProps<{ open: boolean; title?: string; description?: string; closeLabel?: string; size?: 'md' | 'lg' | 'xl'; hideClose?: boolean; centered?: boolean }>(), {
   size: 'md',
+  hideClose: false,
+  centered: false,
 })
 defineEmits<{ close: [] }>()
 
@@ -16,19 +18,26 @@ const sizeClass = computed(() => ({
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
-      <section class="premium-surface max-h-[92vh] w-full overflow-y-auto rounded-2xl p-5 shadow-2xl sm:p-6" :class="sizeClass">
-        <div class="flex items-center justify-between gap-3">
-          <div>
+    <div v-if="open" class="fixed inset-0 z-[100] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm dark:bg-slate-900/80">
+      <div class="relative w-full" :class="sizeClass">
+        <button
+          v-if="!hideClose"
+          class="absolute -right-3 -top-3 z-[120] grid h-8 w-8 place-items-center rounded-lg bg-white text-slate-500 shadow-lg shadow-slate-950/20 transition hover:bg-slate-50 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:shadow-black/35 dark:hover:bg-slate-700"
+          :aria-label="closeLabel ?? 'Close'"
+          @click="$emit('close')"
+        >
+          <AppIcon name="x" :size="18" />
+        </button>
+        <section class="premium-surface max-h-[92vh] w-full overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-900 sm:p-6">
+        <div class="flex items-start gap-3 pr-10" :class="centered ? 'justify-center text-center' : 'justify-between'">
+          <div :class="centered ? 'mx-auto' : ''">
             <h2 class="text-lg font-bold">{{ title }}</h2>
             <p v-if="description" class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ description }}</p>
           </div>
-          <button class="focus-ring rounded-xl p-2 text-slate-500 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-teal-400/10" :aria-label="closeLabel ?? 'Close'" @click="$emit('close')">
-            <AppIcon name="x" />
-          </button>
         </div>
         <div class="mt-4"><slot /></div>
       </section>
+      </div>
     </div>
   </Teleport>
 </template>

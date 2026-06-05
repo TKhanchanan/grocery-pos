@@ -24,7 +24,7 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <article class="dashboard-kpi group relative overflow-hidden rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-brand-200 hover:shadow-xl hover:shadow-brand-950/10 dark:border-slate-700 dark:bg-slate-900/80 dark:hover:border-emerald-400/40 dark:hover:shadow-black/30">
+  <article class="dashboard-kpi group relative overflow-hidden rounded-2xl bg-white/80 p-5 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-950/10 dark:bg-slate-900/80 dark:hover:shadow-black/30">
     <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-emerald-400 to-sky-400 opacity-80" />
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">

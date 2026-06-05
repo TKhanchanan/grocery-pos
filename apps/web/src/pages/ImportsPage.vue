@@ -7,6 +7,7 @@ import AppCard from '../components/AppCard.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import type { ImportJob, ImportJobRow } from '../types/navigation'
+import { formatThaiDateTime } from '../utils/date'
 
 const jobs = ref<ImportJob[]>([])
 const previewJob = ref<ImportJob | null>(null)
@@ -165,7 +166,6 @@ onMounted(loadJobs)
         <AppCard>
           <div class="flex items-center justify-between gap-3">
             <h2 class="font-bold">Import history</h2>
-            <AppButton variant="secondary" @click="loadJobs">Refresh</AppButton>
           </div>
           <div v-if="loading" class="mt-4 text-sm text-slate-500">Loading imports...</div>
           <AppEmptyState v-else-if="jobs.length === 0" class="mt-4" title="No imports" description="Previewed and confirmed imports appear here." />
@@ -174,7 +174,7 @@ onMounted(loadJobs)
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
                   <p class="truncate font-bold">#{{ job.id }} {{ job.file_name }}</p>
-                  <p class="text-xs text-slate-500">{{ new Date(job.created_at).toLocaleString('th-TH') }}</p>
+                  <p class="text-xs text-slate-500">{{ formatThaiDateTime(job.created_at) }}</p>
                 </div>
                 <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">{{ job.status }}</span>
               </div>

@@ -7,6 +7,7 @@ import AppEmptyState from '../components/AppEmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { useAppStore } from '../stores/app'
 import type { Receipt } from '../types/navigation'
+import { formatThaiDateTime } from '../utils/date'
 
 const app = useAppStore()
 const route = useRoute()
@@ -25,8 +26,7 @@ function money(value: number) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return '-'
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  return formatThaiDateTime(value)
 }
 
 function paymentLabel(method: string) {

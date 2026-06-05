@@ -4,10 +4,11 @@ import { apiClient } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
+import AppDateRangeFilter from '../components/AppDateRangeFilter.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import AppIcon from '../components/AppIcon.vue'
-import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import AppSelect from '../components/AppSelect.vue'
 import PageHeader from '../components/PageHeader.vue'
 import ProductAvatar from '../components/ProductAvatar.vue'
@@ -17,6 +18,7 @@ import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { IconName } from '../types/icons'
 import type { Location, PaymentSummaryReport, ProductSalesReport, SalesPeriodReport, StockReport, StockStatus } from '../types/navigation'
+import { formatThaiDate } from '../utils/date'
 
 type ReportKey = 'daily-sales' | 'monthly-sales' | 'best-selling' | 'profit-by-product' | 'stock' | 'inventory-valuation' | 'payment-summary' | 'low-stock' | 'reorder'
 type ReportRow = SalesPeriodReport | ProductSalesReport | StockReport | PaymentSummaryReport
@@ -186,6 +188,18 @@ function quantity(value: number) {
   return value.toLocaleString(locale.value)
 }
 
+function formatPeriod(value: string) {
+  if (!value) return '-'
+  const text = String(value).trim()
+  if (activeTab.value === 'monthly-sales') {
+    const monthMatch = text.match(/^(\d{4})[-/](\d{1,2})$/)
+    if (monthMatch) return formatThaiDate(`${monthMatch[1]}-${monthMatch[2].padStart(2, '0')}-01T00:00:00`)
+  }
+  const normalized = /^\d{4}-\d{1,2}-\d{1,2}$/.test(text) ? `${text}T00:00:00` : text
+  const formatted = formatThaiDate(normalized)
+  return formatted === normalized ? text : formatted
+}
+
 function profitClass(value: number) {
   return value < 0 ? 'text-red-600 dark:text-red-300' : 'text-brand-700 dark:text-emerald-200'
 }
@@ -254,9 +268,36 @@ function downloadCSV(filename: string, data: CsvCell[][]) {
   URL.revokeObjectURL(url)
 }
 
+function htmlEscape(value: CsvCell) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}
+
+function downloadExcel(filename: string, data: CsvCell[][]) {
+  const rowsHTML = data.map((row) => `<tr>${row.map((cell) => `<td>${htmlEscape(cell)}</td>`).join('')}</tr>`).join('')
+  const workbook = `<!doctype html><html><head><meta charset="utf-8" /></head><body><table>${rowsHTML}</table></body></html>`
+  const blob = new Blob([workbook], { type: 'application/vnd.ms-excel;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 function activeExportFilename() {
   const suffix = new Date().toISOString().slice(0, 10)
   return `${activeTab.value}-${suffix}.csv`
+}
+
+function activeExcelFilename() {
+  const suffix = new Date().toISOString().slice(0, 10)
+  return `${activeTab.value}-${suffix}.xls`
 }
 
 function activeExportRows(): CsvCell[][] {
@@ -324,6 +365,22 @@ async function exportCSV() {
   }
 }
 
+async function exportExcel() {
+  if (!canExport.value) return
+  exportLoading.value = true
+  error.value = ''
+  try {
+    downloadExcel(activeExcelFilename(), activeExportRows())
+    app.pushToast({ type: 'success', message: app.t('reports.exportSuccess') })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : app.t('reports.exportFailed')
+    error.value = message
+    app.pushToast({ type: 'error', message: app.t('reports.exportFailed'), description: message })
+  } finally {
+    exportLoading.value = false
+  }
+}
+
 async function loadLocations() {
   locations.value = await apiClient<Location[]>('/v1/locations')
 }
@@ -341,8 +398,8 @@ function clearFilters() {
   loadReport()
 }
 
-function changePageSize(value: string) {
-  pageSize.value = Number(value)
+function changePageSize(value: number) {
+  pageSize.value = value
   page.value = 1
 }
 
@@ -362,9 +419,7 @@ onMounted(async () => {
 
 <template>
   <section>
-    <PageHeader :title="app.t('reports.title')" :eyebrow="app.t('reports.eyebrow')" :description="app.t('reports.description')" icon="chart-column">
-      <AppButton variant="secondary" icon="history" @click="loadReport">{{ app.t('reports.refresh') }}</AppButton>
-    </PageHeader>
+    <PageHeader :title="app.t('reports.title')" :eyebrow="app.t('reports.eyebrow')" :description="app.t('reports.description')" icon="chart-column" />
 
     <div class="grid gap-4">
       <div class="flex gap-2 overflow-x-auto pb-1">
@@ -385,10 +440,17 @@ onMounted(async () => {
           </div>
           <!-- <AppBadge tone="info">{{ app.t('reports.reportCenter') }}</AppBadge> -->
         </div>
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto]">
-          <AppInput v-model="filters.date_from" :label="app.t('reports.dateFrom')" type="date" :disabled="isStockReport" />
-          <AppInput v-model="filters.date_to" :label="app.t('reports.dateTo')" type="date" :disabled="isStockReport" />
-          <AppInput v-model="filters.month" :label="app.t('reports.month')" type="month" :disabled="isStockReport" />
+        <div class="grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(220px,1fr)_auto]">
+          <AppDateRangeFilter
+            v-model:date-from="filters.date_from"
+            v-model:date-to="filters.date_to"
+            v-model:month="filters.month"
+            :date-from-label="app.t('reports.dateFrom')"
+            :date-to-label="app.t('reports.dateTo')"
+            :month-label="app.t('reports.month')"
+            :disabled="isStockReport"
+            show-month
+          />
           <AppSelect v-model="filters.location_id" :label="app.t('reports.location')">
             <option value="">{{ app.t('reports.allLocations') }}</option>
             <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
@@ -400,7 +462,7 @@ onMounted(async () => {
         </div>
       </AppCard>
 
-      <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div class="grid gap-3 md:grid-cols-2" :class="kpiCards.length === 3 ? 'xl:grid-cols-3' : 'xl:grid-cols-4'">
         <StatCard v-for="card in kpiCards" :key="card.label" :label="card.label" :value="card.value" :helper="card.helper" :icon="card.icon" :tone="card.tone" />
       </div>
 
@@ -421,7 +483,7 @@ onMounted(async () => {
           <div class="flex flex-wrap items-center gap-2 sm:justify-end">
             <AppBadge tone="neutral">{{ rows.length.toLocaleString(locale) }} {{ app.t('reports.rows') }}</AppBadge>
             <AppButton v-if="canExport" variant="secondary" icon="download" :loading="exportLoading" @click="exportCSV">{{ app.t('reports.exportCSV') }}</AppButton>
-            <AppButton v-if="canExport" variant="secondary" icon="download" disabled>{{ app.t('reports.exportExcel') }}</AppButton>
+            <AppButton v-if="canExport" variant="secondary" icon="download" :loading="exportLoading" @click="exportExcel">{{ app.t('reports.exportExcel') }}</AppButton>
           </div>
         </div>
 
@@ -462,13 +524,13 @@ onMounted(async () => {
                 <th class="px-3 py-3 text-right">{{ app.t('reports.stockQuantity') }}</th>
                 <th v-if="activeTab === 'low-stock'" class="px-3 py-3 text-right">{{ app.t('reports.threshold') }}</th>
                 <th v-if="activeTab === 'reorder'" class="px-3 py-3 text-right">{{ app.t('reports.reorderPoint') }}</th>
-                <th class="px-3 py-3 text-left">{{ activeTab === 'reorder' ? app.t('reports.suggestedAction') : app.t('reports.status') }}</th>
+                <th class="px-3 py-3 text-right">{{ activeTab === 'reorder' ? app.t('reports.suggestedAction') : app.t('reports.status') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
               <tr v-for="(row, index) in visibleRows" :key="index" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
                 <template v-if="isPeriodReport">
-                  <td class="px-3 py-3 font-semibold">{{ (row as SalesPeriodReport).period }}</td>
+                  <td class="px-3 py-3 font-semibold">{{ formatPeriod((row as SalesPeriodReport).period) }}</td>
                   <td class="px-3 py-3 text-right">{{ (row as SalesPeriodReport).receipt_count.toLocaleString(locale) }}</td>
                   <td class="px-3 py-3 text-right">{{ money((row as SalesPeriodReport).revenue) }}</td>
                   <td class="px-3 py-3 text-right">{{ money((row as SalesPeriodReport).cost) }}</td>
@@ -516,7 +578,7 @@ onMounted(async () => {
                   <td class="px-3 py-3 text-right">{{ (row as StockReport).quantity.toLocaleString(locale) }}</td>
                   <td v-if="activeTab === 'low-stock'" class="px-3 py-3 text-right">{{ (row as StockReport).threshold.toLocaleString(locale) }}</td>
                   <td v-if="activeTab === 'reorder'" class="px-3 py-3 text-right">{{ (row as StockReport).reorder_point.toLocaleString(locale) }}</td>
-                  <td class="px-3 py-3">
+                  <td class="px-3 py-3 text-right">
                     <AppBadge v-if="activeTab !== 'reorder'" :tone="stockStatusTone((row as StockReport).stock_status)">{{ stockStatusLabel((row as StockReport).stock_status) }}</AppBadge>
                     <span v-else class="font-semibold text-brand-700 dark:text-emerald-200">{{ suggestedAction(row as StockReport) }}</span>
                   </td>
@@ -529,7 +591,7 @@ onMounted(async () => {
         <div class="grid gap-3 lg:hidden">
           <article v-for="(row, index) in visibleRows" :key="index" class="rounded-2xl border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/60">
             <template v-if="isPeriodReport">
-              <h3 class="font-black">{{ (row as SalesPeriodReport).period }}</h3>
+              <h3 class="font-black">{{ formatPeriod((row as SalesPeriodReport).period) }}</h3>
               <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ (row as SalesPeriodReport).receipt_count.toLocaleString(locale) }} {{ app.t('reports.receipts') }}</p>
               <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
                 <div><dt class="text-slate-500">{{ app.t('reports.revenue') }}</dt><dd class="font-bold">{{ money((row as SalesPeriodReport).revenue) }}</dd></div>
@@ -577,11 +639,7 @@ onMounted(async () => {
         <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex flex-wrap items-center gap-2">
             <span class="text-slate-500 dark:text-slate-400">{{ app.t('reports.show') }}</span>
-            <AppSelect :model-value="pageSize" hide-arrow @update:model-value="changePageSize">
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="50">50</option>
-            </AppSelect>
+            <AppPageSizeSelect :model-value="pageSize" @update:model-value="changePageSize" />
             <span class="text-slate-500 dark:text-slate-400">{{ app.t('reports.perPage') }}</span>
             <span class="text-slate-500 dark:text-slate-400">{{ app.t('reports.totalRows') }} {{ rows.length.toLocaleString(locale) }}</span>
           </div>

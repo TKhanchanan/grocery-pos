@@ -509,7 +509,6 @@ onBeforeUnmount(() => {
   <section>
     <PageHeader :title="app.t('products.title')" :eyebrow="app.t('products.eyebrow')" :description="app.t('products.description')" icon="package">
       <div class="flex flex-wrap gap-2">
-        <AppButton variant="secondary" icon="history" @click="load">{{ app.t('products.refresh') }}</AppButton>
         <AppButton v-if="canImportProducts" variant="secondary" icon="upload" @click="openProductImport">{{ app.t('products.importData') }}</AppButton>
         <AppButton v-if="canCreate" icon="plus" @click="openCreate">{{ app.t('products.add') }}</AppButton>
       </div>

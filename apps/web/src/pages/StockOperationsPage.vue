@@ -9,6 +9,7 @@ import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import AppModal from '../components/AppModal.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import AppSelect from '../components/AppSelect.vue'
 import AppTabs from '../components/AppTabs.vue'
 import AppTextarea from '../components/AppTextarea.vue'
@@ -18,6 +19,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { Location, Product, ProductStock, StockMovement } from '../types/navigation'
+import { formatThaiDateTime } from '../utils/date'
 
 type StockTab = 'restock' | 'movements'
 
@@ -257,8 +259,8 @@ async function adjustStock() {
   }
 }
 
-function changePageSize(value: string) {
-  pageSize.value = Number(value)
+function changePageSize(value: number) {
+  pageSize.value = value
   page.value = 1
   loadMovements()
 }
@@ -374,7 +376,7 @@ onMounted(async () => {
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                 <tr v-for="movement in movements" :key="movement.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
-                  <td class="px-3 py-3">{{ new Date(movement.created_at).toLocaleString(locale) }}</td>
+                  <td class="px-3 py-3">{{ formatThaiDateTime(movement.created_at) }}</td>
                   <td class="px-3 py-3">
                     <div class="flex min-w-0 items-center gap-3">
                       <ProductAvatar :src="movementImageURL(movement)" :updated-at="movementImageUpdatedAt(movement)" :name="movement.product_name" size="sm" shape="square" />
@@ -407,7 +409,7 @@ onMounted(async () => {
                 </div>
                 <span class="font-black" :class="movement.quantity_change < 0 ? 'text-red-600 dark:text-red-300' : 'text-brand-700 dark:text-emerald-200'">{{ signed(movement.quantity_change) }}</span>
               </div>
-              <div class="mt-3 flex flex-wrap gap-2"><AppBadge :tone="movementTone(movement.reference_type)">{{ movement.reference_type }}</AppBadge><span class="text-xs text-slate-500 dark:text-slate-400">{{ new Date(movement.created_at).toLocaleString(locale) }}</span></div>
+              <div class="mt-3 flex flex-wrap gap-2"><AppBadge :tone="movementTone(movement.reference_type)">{{ movement.reference_type }}</AppBadge><span class="text-xs text-slate-500 dark:text-slate-400">{{ formatThaiDateTime(movement.created_at) }}</span></div>
               <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
                 <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.before') }}</dt><dd class="font-semibold">{{ movement.before_stock }}</dd></div>
                 <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.after') }}</dt><dd class="font-semibold">{{ movement.after_stock }}</dd></div>
@@ -419,11 +421,7 @@ onMounted(async () => {
           <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 md:flex-row md:items-center md:justify-between">
             <div class="flex flex-wrap items-center gap-2">
               <span>{{ app.t('stockOps.show') }}</span>
-              <AppSelect :model-value="pageSize" @update:model-value="changePageSize">
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="50">50</option>
-              </AppSelect>
+              <AppPageSizeSelect :model-value="pageSize" @update:model-value="changePageSize" />
               <span>{{ app.t('stockOps.perPage') }}</span>
               <span class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.total') }} {{ totalMovements }}</span>
             </div>

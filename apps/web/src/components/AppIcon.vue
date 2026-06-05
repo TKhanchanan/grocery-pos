@@ -40,6 +40,7 @@ withDefaults(defineProps<{ name: IconName; size?: number; strokeWidth?: number }
       <path d="M16 17h6" />
     </template>
     <template v-else-if="name === 'history'"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /><path d="M12 7v5l3 2" /></template>
+    <template v-else-if="name === 'refresh'"><path d="M20 11a8 8 0 0 0-14.2-4.9" /><path d="M5 3v4h4" /><path d="M4 13a8 8 0 0 0 14.2 4.9" /><path d="M19 21v-4h-4" /></template>
     <template v-else-if="name === 'map-pin'"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="3" /></template>
     <template v-else-if="name === 'arrow-left-right'"><path d="M8 7h13" /><path d="m18 4 3 3-3 3" /><path d="M16 17H3" /><path d="m6 14-3 3 3 3" /></template>
     <template v-else-if="name === 'receipt-text'">
@@ -81,6 +82,10 @@ withDefaults(defineProps<{ name: IconName; size?: number; strokeWidth?: number }
     <template v-else-if="name === 'sun'"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></template>
     <template v-else-if="name === 'moon'"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.7 6.7 0 0 0 9.8 9.8Z" /></template>
     <template v-else-if="name === 'text-size'"><path d="M4 7V4h10v3" /><path d="M9 4v16" /><path d="M6 20h6" /><path d="M15 13v-2h5v2" /><path d="M17.5 11v9" /><path d="M16 20h3" /></template>
+    <template v-else-if="name === 'chevron-down'"><path d="m6 9 6 6 6-6" /></template>
+    <template v-else-if="name === 'chevron-left'"><path d="m15 18-6-6 6-6" /></template>
+    <template v-else-if="name === 'chevron-right'"><path d="m9 18 6-6-6-6" /></template>
+    <template v-else-if="name === 'calendar'"><path d="M8 2v4M16 2v4" /><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18" /></template>
     <template v-else-if="name === 'role'">
       <path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3Z" />
       <path d="M12 11a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z" />

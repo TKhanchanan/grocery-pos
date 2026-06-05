@@ -3,7 +3,7 @@ defineProps<{ columns: string[]; rows?: Record<string, string | number>[] }>()
 </script>
 
 <template>
-  <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white/80 shadow-sm dark:border-slate-700 dark:bg-slate-950/60">
+  <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-none dark:border-slate-700 dark:bg-slate-900/80">
     <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
       <thead class="bg-slate-50 dark:bg-slate-900">
         <tr>

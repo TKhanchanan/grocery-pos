@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { downloadFile } from '../api/download'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
-import AppInput from '../components/AppInput.vue'
+import AppDateRangeFilter from '../components/AppDateRangeFilter.vue'
 import PageHeader from '../components/PageHeader.vue'
 
 const loadingKey = ref('')
@@ -55,11 +55,15 @@ function exportProfit() {
 
     <div class="grid gap-4">
       <AppCard>
-        <div class="grid gap-3 md:grid-cols-3">
-          <AppInput v-model="filters.month" label="Month" type="month" />
-          <AppInput v-model="filters.date_from" label="Sales date from" type="date" />
-          <AppInput v-model="filters.date_to" label="Sales date to" type="date" />
-        </div>
+        <AppDateRangeFilter
+          v-model:date-from="filters.date_from"
+          v-model:date-to="filters.date_to"
+          v-model:month="filters.month"
+          date-from-label="Sales date from"
+          date-to-label="Sales date to"
+          month-label="Month"
+          show-month
+        />
         <div v-if="error" class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
       </AppCard>
 

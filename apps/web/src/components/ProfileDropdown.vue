@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 import { apiClient } from '../api/client'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
-import type { AuthMeResponse, User } from '../types/navigation'
+import type { User } from '../types/navigation'
+import { formatThaiDateTime } from '../utils/date'
 import AppAvatar from './AppAvatar.vue'
 import AppButton from './AppButton.vue'
+import AppImageCropper from './AppImageCropper.vue'
 import AppIcon from './AppIcon.vue'
 import AppModal from './AppModal.vue'
 
@@ -18,6 +20,8 @@ const profileOpen = ref(false)
 const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const root = ref<HTMLElement | null>(null)
+const cropperOpen = ref(false)
+const pendingAvatarFile = ref<File | null>(null)
 
 const displayName = computed(() => auth.user?.fullName || auth.user?.username || 'User')
 const roleLabel = computed(() => auth.roles.map((role) => role.name).join(', ') || auth.user?.role || '-')
@@ -25,6 +29,10 @@ const permissionsSummary = computed(() => `${auth.permissions.length} permission
 
 function onDocumentClick(event: MouseEvent) {
   if (root.value && !root.value.contains(event.target as Node)) open.value = false
+}
+
+function closeFromTopbarControl() {
+  open.value = false
 }
 
 function showProfile() {
@@ -38,7 +46,7 @@ function chooseAvatar() {
   window.setTimeout(() => fileInput.value?.click(), 50)
 }
 
-async function uploadAvatar(file?: File) {
+function prepareAvatar(file?: File) {
   if (!file) return
   const allowed = ['image/jpeg', 'image/png', 'image/webp']
   if (!allowed.includes(file.type)) {
@@ -49,6 +57,13 @@ async function uploadAvatar(file?: File) {
     app.pushToast({ type: 'error', message: 'Image is too large', description: 'ขนาดรูปต้องไม่เกิน 2MB' })
     return
   }
+  pendingAvatarFile.value = file
+  cropperOpen.value = true
+}
+
+async function uploadAvatar(file?: File) {
+  if (!file) return
+  cropperOpen.value = false
   uploading.value = true
   try {
     const body = new FormData()
@@ -62,6 +77,12 @@ async function uploadAvatar(file?: File) {
     uploading.value = false
     if (fileInput.value) fileInput.value.value = ''
   }
+}
+
+function cancelCropper() {
+  cropperOpen.value = false
+  pendingAvatarFile.value = null
+  if (fileInput.value) fileInput.value.value = ''
 }
 
 async function removeAvatar() {
@@ -84,8 +105,14 @@ async function logout() {
   router.push('/login')
 }
 
-onMounted(() => document.addEventListener('mousedown', onDocumentClick))
-onBeforeUnmount(() => document.removeEventListener('mousedown', onDocumentClick))
+onMounted(() => {
+  document.addEventListener('mousedown', onDocumentClick)
+  window.addEventListener('topbar-control-opened', closeFromTopbarControl)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocumentClick)
+  window.removeEventListener('topbar-control-opened', closeFromTopbarControl)
+})
 </script>
 
 <template>
@@ -94,7 +121,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocumentClick)
       aria-label="เปิดเมนูโปรไฟล์" type="button" @click="open = !open">
       <AppAvatar :src="auth.user?.avatar_url" :name="displayName" size="md" />
     </button>
-    <div v-if="open" class="premium-surface absolute right-0 z-50 mt-3 w-[min(320px,calc(100vw-24px))] rounded-2xl border p-2 shadow-2xl">
+    <div v-if="open" class="premium-surface absolute right-0 z-50 mt-3 w-[min(320px,calc(100vw-24px))] rounded-2xl border bg-white/95 p-2 shadow-2xl dark:bg-slate-900/95">
       <div class="flex items-center gap-3 border-b border-slate-100 p-3 dark:border-slate-800">
         <AppAvatar :src="auth.user?.avatar_url" :name="displayName" size="md" />
         <div class="min-w-0">
@@ -142,20 +169,24 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocumentClick)
           </div>
           <div class="rounded-xl bg-white/70 p-3 dark:bg-slate-950/60 sm:col-span-2">
             <dt class="text-slate-500 dark:text-slate-400">Avatar updated</dt>
-            <dd class="font-bold">{{ auth.user?.avatar_updated_at ? new Date(auth.user.avatar_updated_at).toLocaleString() : '-' }}</dd>
+            <dd class="font-bold">{{ formatThaiDateTime(auth.user?.avatar_updated_at) }}</dd>
           </div>
         </dl>
 
         <div>
           <p class="font-bold">อัปโหลดรูปโปรไฟล์</p>
           <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">รองรับ JPG, PNG, WEBP ขนาดไม่เกิน 2MB</p>
-          <input ref="fileInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp" @change="uploadAvatar(($event.target as HTMLInputElement).files?.[0])" />
+          <input ref="fileInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp" @change="prepareAvatar(($event.target as HTMLInputElement).files?.[0])" />
           <div class="mt-4 flex flex-wrap gap-2">
             <AppButton variant="secondary" icon="upload" :loading="uploading" @click="fileInput?.click()">เลือกรูปโปรไฟล์</AppButton>
             <AppButton v-if="auth.user?.avatar_url" variant="danger" :loading="uploading" @click="removeAvatar">ลบรูปโปรไฟล์</AppButton>
           </div>
         </div>
       </div>
+    </AppModal>
+
+    <AppModal :open="cropperOpen" title="ครอปรูปโปรไฟล์" centered @close="cancelCropper">
+      <AppImageCropper :file="pendingAvatarFile" @cropped="uploadAvatar" @cancel="cancelCropper" />
     </AppModal>
   </div>
 </template>

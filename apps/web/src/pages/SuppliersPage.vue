@@ -95,7 +95,6 @@ onMounted(loadSuppliers)
       <AppCard>
         <div class="flex items-center justify-between gap-3">
           <h2 class="font-bold">Supplier list</h2>
-          <AppButton variant="secondary" @click="loadSuppliers">Refresh</AppButton>
         </div>
         <div v-if="loading" class="mt-4 text-sm text-slate-500">Loading suppliers...</div>
         <AppEmptyState v-else-if="suppliers.length === 0" class="mt-4" title="No suppliers" description="Create a supplier to start purchase orders." />

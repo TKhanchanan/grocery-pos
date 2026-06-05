@@ -290,7 +290,6 @@ onMounted(load)
   <section>
     <PageHeader :title="app.t('roles.title')" :eyebrow="app.t('roles.eyebrow')" :description="app.t('roles.description')" icon="role">
       <div class="flex flex-wrap gap-2">
-        <AppButton variant="secondary" icon="history" @click="load">{{ app.t('roles.refresh') }}</AppButton>
         <AppButton v-if="canCreate" icon="plus" @click="openCreateRole">{{ app.t('roles.add') }}</AppButton>
       </div>
     </PageHeader>

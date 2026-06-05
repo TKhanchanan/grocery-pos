@@ -69,14 +69,21 @@
 
 @layer components {
   .focus-ring {
-    @apply outline-none ring-brand-600/25 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-950;
+    @apply outline-none focus:outline-none;
   }
 
   .premium-surface {
     background: var(--app-surface-elevated);
-    border-color: transparent;
+    border: 0;
     box-shadow: var(--shadow-card);
-    backdrop-filter: blur(18px);
+  }
+
+  html.dark .premium-surface {
+    border: 0;
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
   }
 
   .premium-card-hover {
@@ -86,6 +93,39 @@
   .premium-card-hover:hover {
     transform: translateY(-1px);
     box-shadow: var(--shadow-soft);
+  }
+
+  article.rounded-2xl.border,
+  .pos-product-card,
+  .pos-cart-item,
+  .dashboard-kpi {
+    border-color: transparent !important;
+    box-shadow: var(--shadow-card);
+  }
+
+  article.rounded-2xl.border:hover,
+  .pos-product-card:hover,
+  .pos-cart-item:hover {
+    border-color: transparent !important;
+    box-shadow: var(--shadow-soft);
+  }
+
+  article.rounded-2xl.border.nested-border-card,
+  article.rounded-2xl.border.nested-border-card:hover,
+  .nested-border-card,
+  .nested-border-card:hover {
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(13, 80, 82, 0.24) !important;
+    box-shadow: none !important;
+  }
+
+  html.dark article.rounded-2xl.border.nested-border-card,
+  html.dark article.rounded-2xl.border.nested-border-card:hover,
+  html.dark .nested-border-card,
+  html.dark .nested-border-card:hover {
+    background: rgba(0, 0, 0, 0);
+    border-color: rgba(204, 251, 241, 0.16) !important;
+    box-shadow: none !important;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -118,25 +158,12 @@
   }
 }
 
-.border-slate-100,
-.border-slate-200,
-.border-slate-300,
-.border-slate-700,
-.border-slate-800,
-.border-brand-100,
-.border-brand-200,
-.border-brand-300,
-.border-white\/20,
-.border-white\/30 {
-  border-color: transparent !important;
-}
-
 .shadow-sm {
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+  box-shadow: none;
 }
 
 html.dark .shadow-sm {
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+  box-shadow: none;
 }
 
 html.dark .bg-white,
@@ -192,6 +219,56 @@ html.dark .hover\:bg-slate-50\/80:hover,
 html.dark .hover\:bg-slate-100:hover,
 html.dark .hover\:bg-brand-50:hover {
   background-color: rgb(30 41 59);
+}
+
+*:focus,
+*:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+input,
+select,
+textarea {
+  border-color: rgb(203 213 225);
+}
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+table thead th {
+  background-color: rgb(248 250 252);
+  color: rgb(71 85 105);
+  font-weight: 900;
+}
+
+table thead tr:first-child th:first-child {
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+table thead tr:first-child th:last-child {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+table tbody tr {
+  transition: background-color 160ms ease;
+}
+
+table tbody tr:hover {
+  background-color: rgb(248 250 252 / 0.78);
+}
+
+html.dark table thead th {
+  background-color: rgb(15 23 42 / 0.92);
+  color: rgb(203 213 225);
+}
+
+html.dark table tbody tr:hover {
+  background-color: rgb(15 23 42 / 0.72);
 }
 
 html.dark input,

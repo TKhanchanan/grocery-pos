@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { apiClient } from '../api/client'
 import logoUrl from '../assets/logo.png'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { AlertType, InventoryAlert, NavigationItem } from '../types/navigation'
+import { formatThaiDateTime } from '../utils/date'
 import AppBadge from '../components/AppBadge.vue'
 import AppDrawer from '../components/AppDrawer.vue'
 import AppIcon from '../components/AppIcon.vue'
@@ -19,6 +20,7 @@ interface NavigationGroup {
 const app = useAppStore()
 const auth = useAuthStore()
 const route = useRoute()
+const router = useRouter()
 const languageOpen = ref(false)
 const textSizeOpen = ref(false)
 const notificationsOpen = ref(false)
@@ -96,11 +98,15 @@ function isActive(to: string) {
 function selectLanguage(value: 'th' | 'en') {
   app.setLanguage(value)
   languageOpen.value = false
+  textSizeOpen.value = false
+  notificationsOpen.value = false
 }
 
 function selectTextSize(value: 'sm' | 'base' | 'lg' | 'xl') {
   app.setTextSize(value)
   textSizeOpen.value = false
+  languageOpen.value = false
+  notificationsOpen.value = false
 }
 
 function alertTypeLabel(type: AlertType) {
@@ -144,7 +150,7 @@ function alertIconClass(type: AlertType) {
 }
 
 function notificationTime(value: string) {
-  return new Date(value).toLocaleString(app.language === 'th' ? 'th-TH' : 'en-US', { dateStyle: 'short', timeStyle: 'short' })
+  return formatThaiDateTime(value)
 }
 
 async function loadLatestAlerts() {
@@ -165,7 +171,29 @@ async function toggleNotifications() {
   notificationsOpen.value = !notificationsOpen.value
   languageOpen.value = false
   textSizeOpen.value = false
+  window.dispatchEvent(new Event('topbar-control-opened'))
   if (notificationsOpen.value) await loadLatestAlerts()
+}
+
+function toggleTextSize() {
+  textSizeOpen.value = !textSizeOpen.value
+  languageOpen.value = false
+  notificationsOpen.value = false
+  window.dispatchEvent(new Event('topbar-control-opened'))
+}
+
+function toggleLanguage() {
+  languageOpen.value = !languageOpen.value
+  textSizeOpen.value = false
+  notificationsOpen.value = false
+  window.dispatchEvent(new Event('topbar-control-opened'))
+}
+
+function refreshCurrentPage() {
+  languageOpen.value = false
+  textSizeOpen.value = false
+  notificationsOpen.value = false
+  router.go(0)
 }
 
 function closeNotifications() {
@@ -200,7 +228,7 @@ watch(() => route.path, () => {
   <div class="min-h-screen lg:grid" :class="app.sidebarCollapsed ? 'lg:grid-cols-[88px_1fr]' : 'lg:grid-cols-[292px_1fr]'">
     <aside class="hidden bg-white/80 shadow-xl shadow-teal-950/5 backdrop-blur-xl transition-[width] dark:bg-slate-950/80 dark:shadow-black/25 lg:block">
       <div class="sticky top-0 flex h-screen flex-col">
-        <div class="p-4">
+        <div class="pt-4 px-4 pb-2">
           <div v-if="!app.sidebarCollapsed" class="flex min-h-12 items-center justify-between gap-3">
             <div class="flex min-w-0 flex-1 items-center gap-3">
               <img class="h-11 w-11 shrink-0 object-contain" :src="logoUrl" :alt="app.t('app.name')" />
@@ -279,16 +307,19 @@ watch(() => route.path, () => {
           </button>
           <div class="hidden min-w-0 sm:block"></div>
           <div ref="topbarControls" class="flex min-w-0 items-center gap-2 sm:gap-2">
+            <button class="grid h-10 w-10 place-items-center rounded-xl text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10" :aria-label="app.t('settings.refresh')" @click="refreshCurrentPage">
+              <AppIcon name="refresh" :size="19" class="transition group-hover:rotate-45" />
+            </button>
             <div class="relative hidden md:block">
               <button
                 class="inline-flex min-h-10 min-w-11 items-center justify-center rounded-xl px-3 text-sm font-black text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10"
                 :aria-label="app.t('settings.adjustTextSize')"
-                @click="textSizeOpen = !textSizeOpen; languageOpen = false"
+                @click="toggleTextSize"
               >
                 <AppIcon name="text-size" :size="20" />
                 <!-- <span class="sr-only">{{ currentTextSize.sample }}</span> -->
               </button>
-              <div v-if="textSizeOpen" class="dark:bg-slate-900/80 absolute right-0 z-40 mt-2 w-48 rounded-2xl p-2 shadow-xl">
+              <div v-if="textSizeOpen" class="premium-surface absolute right-0 z-40 mt-2 w-48 rounded-2xl border bg-white/95 p-2 shadow-xl dark:bg-slate-900/95">
                 <p class="px-3 py-2 text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('settings.textSize') }}</p>
                 <button
                   v-for="option in textSizeOptions"
@@ -306,11 +337,11 @@ watch(() => route.path, () => {
               <button
                 class="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-bold text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10"
                 aria-label="เลือกภาษา"
-                @click="languageOpen = !languageOpen; textSizeOpen = false"
+                @click="toggleLanguage"
               >
                 <span class="text-base leading-none uppercase">{{ currentLanguage.value }}</span>
               </button>
-              <div v-if="languageOpen" class="dark:bg-slate-900/80 absolute right-0 z-40 mt-2 w-44 rounded-2xl p-2 shadow-xl">
+              <div v-if="languageOpen" class="premium-surface absolute right-0 z-40 mt-2 w-44 rounded-2xl border bg-white/95 p-2 shadow-xl dark:bg-slate-900/95">
                 <button
                   v-for="option in languageOptions"
                   :key="option.value"
@@ -325,7 +356,7 @@ watch(() => route.path, () => {
             </div>
             <div v-if="canViewAlerts" class="relative">
               <button
-                class="relative grid h-10 w-10 place-items-center rounded-xl text-slate-700 transition hover:bg-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-400/50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10"
+                class="relative grid h-10 w-10 place-items-center rounded-xl text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10"
                 :aria-label="app.t('topbar.openNotifications')"
                 :aria-expanded="notificationsOpen"
                 aria-haspopup="menu"
@@ -342,9 +373,6 @@ watch(() => route.path, () => {
                     <p class="text-sm font-black">{{ app.t('topbar.notifications') }}</p>
                     <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{{ app.t('topbar.unreadCount').replace('{count}', String(app.alertCount)) }}</p>
                   </div>
-                  <button class="grid h-8 w-8 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" :aria-label="app.t('topbar.close')" @click="closeNotifications">
-                    <AppIcon name="x" :size="16" />
-                  </button>
                 </div>
                 <div class="max-h-[360px] overflow-auto p-2">
                   <div v-if="notificationsLoading" class="p-4 text-sm font-semibold text-slate-500 dark:text-slate-400">{{ app.t('alerts.loading') }}</div>
@@ -382,10 +410,10 @@ watch(() => route.path, () => {
                 </RouterLink>
               </div>
             </div>
-            <button class="grid h-10 w-10 place-items-center rounded-xl text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10" aria-label="Toggle theme" @click="languageOpen = false; textSizeOpen = false; app.toggleTheme()">
+            <button class="grid h-10 w-10 place-items-center rounded-xl text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10" aria-label="Toggle theme" @click="languageOpen = false; textSizeOpen = false; notificationsOpen = false; app.toggleTheme()">
               <AppIcon :name="app.isDark ? 'sun' : 'moon'" :size="20" />
             </button>
-            <ProfileDropdown />
+            <ProfileDropdown @click="languageOpen = false; textSizeOpen = false; notificationsOpen = false" />
           </div>
         </div>
       </header>

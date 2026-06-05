@@ -13,6 +13,7 @@ import PageHeader from '../components/PageHeader.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import type { AppSettings, LineSettings, Location, NotificationLog } from '../types/navigation'
+import { formatThaiDateTime } from '../utils/date'
 
 type SettingsTab = 'shop' | 'receipt' | 'line' | 'accessibility' | 'system'
 
@@ -167,9 +168,7 @@ onMounted(load)
 
 <template>
   <section>
-    <PageHeader :title="app.t('settings.title')" :description="app.t('settings.description')" icon="settings">
-      <AppButton variant="secondary" icon="history" @click="load">{{ app.t('settings.refresh') }}</AppButton>
-    </PageHeader>
+    <PageHeader :title="app.t('settings.title')" :description="app.t('settings.description')" icon="settings" />
 
     <div v-if="error" class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ error }}</div>
     <div v-if="message" class="mb-4 rounded-md border border-brand-100 bg-brand-50 p-3 text-sm text-brand-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-100">{{ message }}</div>
@@ -289,7 +288,6 @@ onMounted(load)
       <AppCard v-if="activeTab === 'line'" class="dark:bg-slate-900/80">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <h2 class="font-bold">{{ app.t('settings.notificationLogs') }}</h2>
-          <AppButton variant="secondary" icon="history" @click="load">{{ app.t('settings.refresh') }}</AppButton>
         </div>
         <p v-if="logs.length === 0" class="mt-4 text-sm text-slate-500 dark:text-slate-400">{{ app.t('settings.noLogs') }}</p>
         <div v-else class="mt-4 hidden overflow-x-auto md:block">
@@ -311,7 +309,7 @@ onMounted(load)
                 <td class="px-3 py-2">{{ log.recipient || '-' }}</td>
                 <td class="px-3 py-2"><span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(log.status)">{{ log.status }}</span></td>
                 <td class="max-w-xs truncate px-3 py-2 text-slate-500 dark:text-slate-400">{{ log.error_message || '-' }}</td>
-                <td class="px-3 py-2 text-slate-500 dark:text-slate-400">{{ new Date(log.created_at).toLocaleString() }}</td>
+                <td class="px-3 py-2 text-slate-500 dark:text-slate-400">{{ formatThaiDateTime(log.created_at) }}</td>
               </tr>
             </tbody>
           </table>
@@ -326,7 +324,7 @@ onMounted(load)
               <span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(log.status)">{{ log.status }}</span>
             </div>
             <p v-if="log.error_message" class="mt-2 text-sm text-red-700">{{ log.error_message }}</p>
-            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{ new Date(log.created_at).toLocaleString() }}</p>
+            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{ formatThaiDateTime(log.created_at) }}</p>
           </article>
         </div>
       </AppCard>

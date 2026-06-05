@@ -4,9 +4,11 @@ import { RouterLink } from 'vue-router'
 import { apiClient, postJSON } from '../api/client'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
+import AppDateRangeFilter from '../components/AppDateRangeFilter.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import AppIcon from '../components/AppIcon.vue'
 import AppInput from '../components/AppInput.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import AppSelect from '../components/AppSelect.vue'
 import AppTextarea from '../components/AppTextarea.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -16,6 +18,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { Location, Receipt } from '../types/navigation'
+import { formatThaiDateTime } from '../utils/date'
 
 const app = useAppStore()
 const auth = useAuthStore()
@@ -70,7 +73,7 @@ function moneyWithCurrency(value: number) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString(locale.value)
+  return formatThaiDateTime(value)
 }
 
 function statusClass(status: Receipt['status']) {
@@ -124,8 +127,8 @@ function resetFilters() {
   loadSales()
 }
 
-function changePageSize(value: string) {
-  pageSize.value = Number(value)
+function changePageSize(value: number) {
+  pageSize.value = value
   page.value = 1
 }
 
@@ -166,15 +169,18 @@ onMounted(async () => {
 
 <template>
   <section>
-    <PageHeader :title="app.t('sales.title')" :eyebrow="app.t('sales.eyebrow')" :description="app.t('sales.description')" icon="purchase-order">
-      <AppButton variant="secondary" icon="history" @click="loadSales">{{ app.t('sales.refresh') }}</AppButton>
-    </PageHeader>
+    <PageHeader :title="app.t('sales.title')" :eyebrow="app.t('sales.eyebrow')" :description="app.t('sales.description')" icon="purchase-order" />
 
     <div class="grid gap-4">
       <AppCard class="dark:bg-slate-900/80">
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <AppInput v-model="filters.date_from" :label="app.t('sales.dateFrom')" type="date" />
-          <AppInput v-model="filters.date_to" :label="app.t('sales.dateTo')" type="date" />
+        <div class="grid gap-3">
+          <AppDateRangeFilter
+            v-model:date-from="filters.date_from"
+            v-model:date-to="filters.date_to"
+            :date-from-label="app.t('sales.dateFrom')"
+            :date-to-label="app.t('sales.dateTo')"
+          />
+          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <AppInput v-model="filters.receipt_no" :label="app.t('sales.receiptNo')" placeholder="RC..." />
           <AppInput v-model="filters.cashier_id" :label="app.t('sales.cashierId')" type="number" />
           <AppSelect v-model="filters.location_id" :label="app.t('sales.location')">
@@ -194,6 +200,7 @@ onMounted(async () => {
           <div class="flex items-end gap-2">
             <AppButton class="flex-1" icon="search" @click="loadSales">{{ app.t('sales.apply') }}</AppButton>
             <AppButton class="flex-1" variant="secondary" @click="resetFilters">{{ app.t('sales.reset') }}</AppButton>
+          </div>
           </div>
         </div>
       </AppCard>
@@ -275,11 +282,7 @@ onMounted(async () => {
         <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex flex-wrap items-center gap-2">
             <span class="text-slate-500 dark:text-slate-400">{{ app.t('sales.show') }}</span>
-            <AppSelect :model-value="pageSize" hide-arrow @update:model-value="changePageSize">
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="50">50</option>
-            </AppSelect>
+            <AppPageSizeSelect :model-value="pageSize" @update:model-value="changePageSize" />
             <span class="text-slate-500 dark:text-slate-400">{{ app.t('sales.perPage') }}</span>
             <span class="text-slate-500 dark:text-slate-400">{{ app.t('sales.totalRows') }} {{ sales.length }}</span>
           </div>

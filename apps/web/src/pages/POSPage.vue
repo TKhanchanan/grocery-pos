@@ -117,7 +117,7 @@ function addProduct(product: POSProduct) {
     return
   }
   cart.addItem(product)
-  app.pushToast({ type: 'success', message: app.t('pos.addedToCart'), description: product.name })
+  app.pushToast({ type: 'success', message: app.t('pos.addedToCart'), description: product.name, resultModal: false })
   if (cart.paymentMethod === 'QR') cart.setReceivedAmount(cart.totalAmount)
   if (cart.paymentMethod === 'CASH' && cart.receivedAmount < cart.totalAmount) cart.setReceivedAmount(cart.totalAmount)
 }
