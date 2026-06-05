@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { apiClient } from '../api/client'
+import logoUrl from '../assets/logo.png'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { AlertType, InventoryAlert, NavigationItem } from '../types/navigation'
@@ -202,9 +203,7 @@ watch(() => route.path, () => {
         <div class="p-4">
           <div v-if="!app.sidebarCollapsed" class="flex min-h-12 items-center justify-between gap-3">
             <div class="flex min-w-0 flex-1 items-center gap-3">
-              <div class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/20">
-                <AppIcon name="shopping-cart" />
-              </div>
+              <img class="h-11 w-11 shrink-0 object-contain" :src="logoUrl" :alt="app.t('app.name')" />
               <div class="min-w-0">
                 <p class="truncate text-xs font-semibold uppercase text-brand-700">{{ app.t('app.name') }}</p>
                 <h1 class="truncate text-base font-black">{{ app.t('app.subtitle') }}</h1>
@@ -245,7 +244,6 @@ watch(() => route.path, () => {
 
     <AppDrawer :open="app.sidebarOpen" @close="app.closeSidebar">
       <div class="mb-4 flex items-center gap-3 rounded-xl bg-brand-50 p-3 shadow-sm dark:bg-slate-900">
-        <div class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/20">
           <AppIcon name="shopping-cart" />
         </div>
         <div class="min-w-0">
