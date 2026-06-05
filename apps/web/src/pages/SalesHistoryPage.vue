@@ -191,7 +191,7 @@ onMounted(async () => {
           </div>
           <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <AppInput v-model="filters.receipt_no" :label="app.t('sales.receiptNo')" :placeholder="app.t('sales.receiptPlaceholder')" />
-            <AppInput v-model="filters.cashier_id" :label="app.t('sales.cashierId')" type="number" :placeholder="app.t('sales.cashierPlaceholder')" />
+            <AppInput v-model="filters.cashier_id" :label="app.t('sales.cashierId')" :placeholder="app.t('sales.cashierPlaceholder')" />
             <AppSelect v-model="filters.location_id" :label="app.t('sales.location')">
               <option value="">{{ app.t('sales.locationPlaceholder') }}</option>
               <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
@@ -245,12 +245,18 @@ onMounted(async () => {
                 <td class="px-3 py-3 text-right">{{ paymentLabel(sale.payment_method) }}</td>
                 <td class="px-3 py-3 text-right"><span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(sale.status)">{{ statusLabel(sale.status) }}</span></td>
                 <td class="px-3 py-3 text-right">
-                  <div class="flex flex-wrap justify-end gap-2">
-                    <RouterLink v-if="canViewReceipt" :to="receiptRoute(sale)" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                  <div class="flex justify-end gap-2 whitespace-nowrap">
+                    <RouterLink v-if="canViewReceipt" :to="receiptRoute(sale)"
+                      class="inline-flex box-border h-10 min-h-10 w-32 min-w-32 shrink-0 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-0 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
                       <AppIcon name="receipt-text" :size="16" />
-                      {{ app.t('sales.viewReceipt') }}
+                      <span class="truncate">{{ app.t('sales.viewReceipt') }}</span>
                     </RouterLink>
-                    <AppButton v-if="canCancel && sale.status === 'COMPLETED'" variant="danger" @click="openCancel(sale)">{{ app.t('sales.cancel') }}</AppButton>
+
+                    <AppButton v-if="canCancel && sale.status === 'COMPLETED'"
+                      class="!box-border !h-10 !min-h-10 !w-32 !min-w-32 !shrink-0 !px-3 !py-0" variant="danger"
+                      @click="openCancel(sale)">
+                      <span class="truncate">{{ app.t('sales.cancel') }}</span>
+                    </AppButton>
                   </div>
                 </td>
               </tr>

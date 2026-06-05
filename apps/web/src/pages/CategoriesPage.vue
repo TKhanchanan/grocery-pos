@@ -10,6 +10,7 @@ import AppLoadingState from '../components/AppLoadingState.vue'
 import AppModal from '../components/AppModal.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
+import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { Category } from '../types/navigation'
@@ -23,6 +24,7 @@ const statusSaving = ref(false)
 const error = ref('')
 const search = ref('')
 const modalOpen = ref(false)
+const saveConfirmOpen = ref(false)
 const nameError = ref('')
 const pendingStatusCategory = ref<Category | null>(null)
 const form = reactive({ id: 0, name: '', description: '' })
@@ -31,6 +33,8 @@ const canCreate = computed(() => auth.hasPermission('categories.create'))
 const canUpdate = computed(() => auth.hasPermission('categories.update'))
 const canDeactivate = computed(() => auth.hasPermission('categories.deactivate'))
 const modalTitle = computed(() => form.id ? app.t('categories.editTitle') : app.t('categories.create'))
+const saveConfirmTitle = computed(() => form.id ? app.t('categories.confirmUpdateTitle') : app.t('categories.confirmCreateTitle'))
+const saveConfirmMessage = computed(() => t('categories.confirmSaveMessage', { name: form.name.trim() || app.t('categories.name') }))
 const filteredCategories = computed(() => {
   const query = search.value.trim().toLowerCase()
   if (!query) return categories.value
@@ -39,6 +43,12 @@ const filteredCategories = computed(() => {
 const pendingStatusNextActive = computed(() => pendingStatusCategory.value ? !pendingStatusCategory.value.is_active : false)
 const pendingStatusMessage = computed(() => pendingStatusNextActive.value ? app.t('categories.confirmActivate') : app.t('categories.confirmDeactivate'))
 const pendingStatusLabel = computed(() => pendingStatusNextActive.value ? app.t('categories.activate') : app.t('categories.deactivate'))
+
+function t(key: TranslationKey, params: Record<string, string | number> = {}) {
+  let text = String(app.t(key))
+  for (const [name, value] of Object.entries(params)) text = text.replaceAll(`{${name}}`, String(value))
+  return text
+}
 
 async function load() {
   loading.value = true
@@ -76,6 +86,7 @@ function openEdit(item: Category) {
 
 function closeModal() {
   if (saving.value) return
+  saveConfirmOpen.value = false
   modalOpen.value = false
   reset()
 }
@@ -85,22 +96,29 @@ function validate() {
   return !nameError.value
 }
 
+function openSaveConfirm() {
+  if (saving.value) return
+  if (!validate()) return
+  saveConfirmOpen.value = true
+}
+
 async function save() {
   if (!validate()) return
   saving.value = true
   error.value = ''
+  const toastMessage = form.id ? app.t('categories.updated') : app.t('categories.created')
   try {
     const payload = { name: form.name.trim(), description: form.description.trim() }
     if (form.id) {
       await patchJSON<Category>(`/v1/categories/${form.id}`, payload)
-      app.pushToast({ type: 'success', message: app.t('categories.updated') })
     } else {
       await postJSON<Category>('/v1/categories', payload)
-      app.pushToast({ type: 'success', message: app.t('categories.created') })
     }
     await load()
+    saveConfirmOpen.value = false
     modalOpen.value = false
     reset()
+    app.pushToast({ type: 'success', message: toastMessage })
   } catch (err) {
     error.value = friendlyError(err, 'categories.saveFailed')
     app.pushToast({ type: 'error', message: app.t('categories.saveFailed'), description: error.value })
@@ -179,9 +197,9 @@ onMounted(load)
                   <td class="px-3 py-3">
                     <AppBadge :tone="item.is_active ? 'success' : 'neutral'">{{ item.is_active ? app.t('categories.active') : app.t('categories.inactive') }}</AppBadge>
                   </td>
-                  <td class="px-3 py-3">
+                  <td class="px-3 py-3 text-right">
                     <div class="flex flex-wrap justify-end gap-2">
-                      <AppButton v-if="canUpdate" variant="secondary" icon="settings" @click="openEdit(item)">{{ app.t('categories.edit') }}</AppButton>
+                      <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('categories.edit')" :aria-label="app.t('categories.edit')" @click="openEdit(item)" />
                       <AppButton v-if="canDeactivate" :variant="item.is_active ? 'danger' : 'secondary'" @click="requestStatusChange(item)">
                         {{ item.is_active ? app.t('categories.deactivate') : app.t('categories.activate') }}
                       </AppButton>
@@ -202,7 +220,7 @@ onMounted(load)
                 <AppBadge :tone="item.is_active ? 'success' : 'neutral'">{{ item.is_active ? app.t('categories.active') : app.t('categories.inactive') }}</AppBadge>
               </div>
               <div class="mt-4 flex flex-wrap gap-2">
-                <AppButton v-if="canUpdate" variant="secondary" icon="settings" @click="openEdit(item)">{{ app.t('categories.edit') }}</AppButton>
+                <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('categories.edit')" :aria-label="app.t('categories.edit')" @click="openEdit(item)" />
                 <AppButton v-if="canDeactivate" :variant="item.is_active ? 'danger' : 'secondary'" @click="requestStatusChange(item)">
                   {{ item.is_active ? app.t('categories.deactivate') : app.t('categories.activate') }}
                 </AppButton>
@@ -214,10 +232,10 @@ onMounted(load)
     </div>
 
     <AppModal :open="modalOpen" :title="modalTitle" :description="app.t('categories.modalDescription')" :close-label="app.t('categories.cancel')" size="lg" @close="closeModal">
-      <form class="grid gap-4" @submit.prevent="save">
+      <form class="grid gap-4" @submit.prevent="openSaveConfirm">
         <div class="grid gap-3 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/45">
-          <AppInput v-model="form.name" :label="app.t('categories.name')" :error="nameError" />
-          <AppInput v-model="form.description" :label="app.t('categories.descriptionField')" />
+          <AppInput v-model="form.name" :label="app.t('categories.name')" :placeholder="app.t('categories.namePlaceholder')" :error="nameError" />
+          <AppInput v-model="form.description" :label="app.t('categories.descriptionField')" :placeholder="app.t('categories.descriptionPlaceholder')" />
         </div>
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <AppButton class="w-full sm:w-auto" type="button" variant="secondary" :disabled="saving" @click="closeModal">{{ app.t('categories.cancel') }}</AppButton>
@@ -225,6 +243,18 @@ onMounted(load)
         </div>
       </form>
     </AppModal>
+
+    <ConfirmDialog
+      :open="saveConfirmOpen"
+      :title="saveConfirmTitle"
+      :message="saveConfirmMessage"
+      :confirm-label="app.t('categories.confirm')"
+      :cancel-label="app.t('categories.cancel')"
+      :destructive="false"
+      :loading="saving"
+      @close="saveConfirmOpen = false"
+      @confirm="save"
+    />
 
     <ConfirmDialog
       :open="Boolean(pendingStatusCategory)"

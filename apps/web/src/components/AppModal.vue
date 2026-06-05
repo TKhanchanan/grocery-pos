@@ -18,7 +18,7 @@ const sizeClass = computed(() => ({
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="fixed inset-0 z-[100] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm dark:bg-slate-900/80">
+    <div v-if="open" class="fixed inset-0 z-[100] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm dark:bg-slate-950/10">
       <div class="relative w-full" :class="sizeClass">
         <button
           v-if="!hideClose"

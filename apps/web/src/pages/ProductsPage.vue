@@ -10,6 +10,7 @@ import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import AppModal from '../components/AppModal.vue'
 import AppSelect from '../components/AppSelect.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import ProductAvatar from '../components/ProductAvatar.vue'
 import StatCard from '../components/StatCard.vue'
@@ -51,7 +52,13 @@ const saving = ref(false)
 const imageSaving = ref(false)
 const error = ref('')
 const modalOpen = ref(false)
+const saveConfirmOpen = ref(false)
 const importModalOpen = ref(false)
+const stockTooltipProductID = ref<number | null>(null)
+const stockTooltipLoading = ref(false)
+const stockTooltipRef = ref<HTMLElement | null>(null)
+const stockTooltipPosition = reactive({ top: 0, left: 0 })
+const stockTooltipAnchor = ref<HTMLElement | null>(null)
 const barcodeScanOpen = ref(false)
 const barcodeScanValue = ref('')
 const barcodeScanInput = ref<{ focus: () => void } | null>(null)
@@ -95,9 +102,15 @@ const totalStock = computed(() => products.value.reduce((sum, product) => sum + 
 const validImportRows = computed(() => importPreviewJob.value?.rows?.filter((row) => row.status === 'PENDING').length ?? 0)
 const invalidImportRows = computed(() => importPreviewJob.value?.rows?.filter((row) => row.status === 'FAILED').length ?? 0)
 const modalTitle = computed(() => form.id ? app.t('products.edit') : app.t('products.add'))
+const saveConfirmTitle = computed(() => form.id ? app.t('products.confirmUpdateTitle') : app.t('products.confirmCreateTitle'))
+const saveConfirmMessage = computed(() => t('products.confirmSaveMessage', { name: form.name.trim() || app.t('products.name') }))
 const currentImage = computed(() => imagePreviewUrl.value || selectedProduct.value?.image_url || '')
 const currentImageUpdatedAt = computed(() => imagePreviewUrl.value ? '' : selectedProduct.value?.image_updated_at ?? '')
 const cameraMessage = computed(() => app.t(cameraMessageKey.value))
+const stockTooltipStyle = computed(() => ({
+  top: `${stockTooltipPosition.top}px`,
+  left: `${stockTooltipPosition.left}px`,
+}))
 let cameraStream: MediaStream | null = null
 let scanFrame = 0
 
@@ -105,6 +118,13 @@ function t(key: TranslationKey, params: Record<string, string | number> = {}) {
   let text = String(app.t(key))
   for (const [name, value] of Object.entries(params)) text = text.replaceAll(`{${name}}`, String(value))
   return text
+}
+
+function formatFileSize(size?: number) {
+  if (!size) return ''
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 
 function defaultUnit() {
@@ -216,8 +236,15 @@ function closeModal() {
   if (saving.value || imageSaving.value) return
   closeCameraScanner()
   barcodeScanOpen.value = false
+  saveConfirmOpen.value = false
   modalOpen.value = false
   resetForm()
+}
+
+function openSaveConfirm() {
+  if (saving.value || imageSaving.value) return
+  if (!validateForm()) return
+  saveConfirmOpen.value = true
 }
 
 function openProductImport() {
@@ -229,6 +256,10 @@ function openProductImport() {
 
 function closeProductImport() {
   if (importUploading.value || importConfirming.value) return
+  resetProductImport()
+}
+
+function resetProductImport() {
   importModalOpen.value = false
   selectedImportFile.value = null
   importPreviewJob.value = null
@@ -285,10 +316,12 @@ async function confirmProductImport() {
   if (!importPreviewJob.value) return
   importConfirming.value = true
   importError.value = ''
+  const importedCount = validImportRows.value
   try {
     importPreviewJob.value = await postJSON<ImportJob>('/v1/imports/products/confirm', { job_id: importPreviewJob.value.id })
     await load()
-    app.pushToast({ type: 'success', message: app.t('products.importSuccess') })
+    resetProductImport()
+    app.pushToast({ type: 'success', message: app.t('products.importSuccess'), description: t('products.importSuccessDescription', { count: importedCount }) })
   } catch (err) {
     importError.value = friendlyError(err, 'products.importConfirmFailed')
     app.pushToast({ type: 'error', message: app.t('products.importConfirmFailed'), description: importError.value })
@@ -461,6 +494,7 @@ async function save() {
   if (!validateForm()) return
   saving.value = true
   error.value = ''
+  const toastMessage = form.id ? app.t('products.updated') : app.t('products.created')
   try {
     const product = form.id
       ? await patchJSON<Product>(`/v1/products/${form.id}`, payload())
@@ -468,9 +502,10 @@ async function save() {
     updateProductRow(product)
     if (imageFile.value) await uploadSelectedImage(product.id)
     await load()
-    app.pushToast({ type: 'success', message: form.id ? app.t('products.updated') : app.t('products.created') })
+    saveConfirmOpen.value = false
     modalOpen.value = false
     resetForm()
+    app.pushToast({ type: 'success', message: toastMessage })
   } catch (err) {
     error.value = friendlyError(err, 'products.saveFailed')
     app.pushToast({ type: 'error', message: app.t('products.saveFailed'), description: error.value })
@@ -489,17 +524,71 @@ async function setActive(product: Product, active: boolean) {
   }
 }
 
-async function showStocks(product: Product) {
+function closeStockTooltip() {
+  stockTooltipProductID.value = null
+  stockTooltipAnchor.value = null
+}
+
+function positionStockTooltip(target: HTMLElement, tooltip?: HTMLElement | null) {
+  const rect = target.getBoundingClientRect()
+  const width = 288
+  const height = tooltip?.offsetHeight || 190
+  const gap = 8
+  stockTooltipPosition.left = Math.max(16, Math.min(window.innerWidth - width - 16, rect.right - width))
+  stockTooltipPosition.top = Math.max(16, Math.min(window.innerHeight - height - 16, rect.top))
+  if (rect.bottom + height + gap <= window.innerHeight) stockTooltipPosition.top = rect.bottom + gap
+}
+
+function handleDocumentPointerDown(event: MouseEvent) {
+  const target = event.target as HTMLElement | null
+  if (!target || !stockTooltipProductID.value) return
+  if (stockTooltipRef.value?.contains(target) || target.closest('[data-stock-tooltip-trigger]')) return
+  closeStockTooltip()
+}
+
+function handleTooltipViewportChange() {
+  if (!stockTooltipProductID.value || !stockTooltipAnchor.value) return
+  positionStockTooltip(stockTooltipAnchor.value, stockTooltipRef.value)
+}
+
+async function showStocks(event: MouseEvent, product: Product) {
+  const target = event.currentTarget as HTMLElement
+  if (stockTooltipProductID.value === product.id) {
+    closeStockTooltip()
+    return
+  }
   selectedProduct.value = product
-  selectedStocks.value = await apiClient<ProductStock[]>(`/v1/products/${product.id}/stocks`)
+  stockTooltipAnchor.value = target
+  positionStockTooltip(target)
+  stockTooltipProductID.value = product.id
+  stockTooltipLoading.value = true
+  await nextTick()
+  positionStockTooltip(target, stockTooltipRef.value)
+  try {
+    selectedStocks.value = await apiClient<ProductStock[]>(`/v1/products/${product.id}/stocks`)
+    await nextTick()
+    if (stockTooltipAnchor.value) positionStockTooltip(stockTooltipAnchor.value, stockTooltipRef.value)
+  } catch (err) {
+    error.value = friendlyError(err, 'products.notFound')
+    stockTooltipProductID.value = null
+    app.pushToast({ type: 'error', message: app.t('products.notFound'), description: error.value })
+  } finally {
+    stockTooltipLoading.value = false
+  }
 }
 
 onMounted(() => {
+  document.addEventListener('mousedown', handleDocumentPointerDown)
+  window.addEventListener('resize', handleTooltipViewportChange)
+  window.addEventListener('scroll', handleTooltipViewportChange, true)
   resetForm()
   load()
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleDocumentPointerDown)
+  window.removeEventListener('resize', handleTooltipViewportChange)
+  window.removeEventListener('scroll', handleTooltipViewportChange, true)
   closeCameraScanner()
   revokePreview()
 })
@@ -562,8 +651,8 @@ onBeforeUnmount(() => {
                   <th class="px-3 py-2 text-left">{{ app.t('products.category') }}</th>
                   <th class="px-3 py-2 text-right">{{ app.t('products.sellingPrice') }}</th>
                   <th class="px-3 py-2 text-right">{{ app.t('products.stock') }}</th>
-                  <th class="px-3 py-2 text-left">{{ app.t('products.status') }}</th>
-                  <th class="px-3 py-2 text-left">{{ app.t('products.actions') }}</th>
+                  <th class="px-3 py-2 text-right">{{ app.t('products.status') }}</th>
+                  <th class="px-3 py-2 text-right">{{ app.t('products.actions') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -581,15 +670,26 @@ onBeforeUnmount(() => {
                   <td class="px-3 py-2">{{ product.category_name || app.t('products.noCategory') }}</td>
                   <td class="px-3 py-2 text-right">{{ money(product.selling_price) }}</td>
                   <td class="px-3 py-2 text-right">{{ product.total_stock }}</td>
-                  <td class="px-3 py-2">
+                  <td class="px-3 py-2 text-right">
                     <span class="rounded-full px-2 py-1 text-xs font-bold" :class="stockClass(product.stock_status)">{{ stockLabel(product.stock_status) }}</span>
                     <span class="ml-2 text-xs text-slate-500 dark:text-slate-400">{{ product.is_active ? app.t('products.active') : app.t('products.inactive') }}</span>
                   </td>
-                  <td class="px-3 py-2">
-                    <div class="flex flex-wrap gap-2">
-                      <AppButton variant="secondary" icon="map-pin" @click="showStocks(product)">{{ app.t('products.stocks') }}</AppButton>
-                      <AppButton v-if="canUpdate" variant="secondary" icon="settings" @click="openEdit(product)">{{ app.t('products.edit') }}</AppButton>
-                      <AppButton v-if="canDeactivate" :variant="product.is_active ? 'danger' : 'secondary'" @click="setActive(product, !product.is_active)">
+                  <td class="px-3 py-2 text-right">
+                    <div class="flex justify-end gap-2 whitespace-nowrap">
+                      <AppButton data-stock-tooltip-trigger
+                        class="!box-border !h-10 !min-h-10 !w-10 !min-w-10 !shrink-0 !px-0 !py-0" variant="secondary"
+                        icon="map-pin" :title="app.t('products.stocks')" :aria-label="app.t('products.stocks')"
+                        @click="showStocks($event, product)" />
+
+                      <AppButton v-if="canUpdate"
+                        class="!box-border !h-10 !min-h-10 !w-10 !min-w-10 !shrink-0 !px-0 !py-0" variant="secondary"
+                        icon="settings" :title="app.t('products.edit')" :aria-label="app.t('products.edit')"
+                        @click="openEdit(product)" />
+
+                      <AppButton v-if="canDeactivate"
+                        class="!box-border !h-10 !min-h-10 !w-28 !min-w-28 !shrink-0 !px-3 !py-0"
+                        :variant="product.is_active ? 'danger' : 'secondary'"
+                        @click="setActive(product, !product.is_active)">
                         {{ product.is_active ? app.t('products.deactivate') : app.t('products.activate') }}
                       </AppButton>
                     </div>
@@ -618,32 +718,20 @@ onBeforeUnmount(() => {
                 <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('products.status') }}</dt><dd class="font-semibold">{{ product.is_active ? app.t('products.active') : app.t('products.inactive') }}</dd></div>
               </dl>
               <div class="mt-3 flex flex-wrap gap-2">
-                <AppButton variant="secondary" icon="map-pin" @click="showStocks(product)">{{ app.t('products.stocks') }}</AppButton>
-                <AppButton v-if="canUpdate" variant="secondary" icon="settings" @click="openEdit(product)">{{ app.t('products.edit') }}</AppButton>
+                <AppButton data-stock-tooltip-trigger class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="map-pin" :title="app.t('products.stocks')" :aria-label="app.t('products.stocks')" @click="showStocks($event, product)" />
+                <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('products.edit')" :aria-label="app.t('products.edit')" @click="openEdit(product)" />
               </div>
             </article>
           </div>
         </div>
       </AppCard>
-
-      <AppCard class="dark:bg-slate-900/80">
-        <h2 class="font-bold">{{ app.t('products.locationStock') }}</h2>
-        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ selectedProduct ? selectedProduct.name : app.t('products.selectStock') }}</p>
-        <div v-if="selectedStocks.length" class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <article v-for="stock in selectedStocks" :key="stock.location_id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/60">
-            <p class="font-semibold">{{ stock.location_name }}</p>
-            <p class="mt-2 text-2xl font-bold text-brand-700 dark:text-emerald-200">{{ stock.quantity }}</p>
-            <span class="mt-2 inline-flex rounded-full px-2 py-1 text-xs font-bold" :class="stockClass(stock.stock_status)">{{ stockLabel(stock.stock_status) }}</span>
-          </article>
-        </div>
-      </AppCard>
     </div>
 
     <AppModal :open="modalOpen" :title="modalTitle" :description="app.t('products.formDescription')" :close-label="app.t('products.cancel')" size="xl" @close="closeModal">
-      <form class="grid gap-4" @submit.prevent="save">
+      <form class="grid gap-4" @submit.prevent="openSaveConfirm">
         <section class="grid gap-3 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/45">
           <h3 class="text-sm font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('products.basicInfo') }}</h3>
-          <div class="grid gap-4 md:grid-cols-[116px_1fr] md:items-end">
+          <div class="grid gap-2 md:grid-cols-[116px_1fr] md:items-end">
             <div class="grid gap-2">
               <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ app.t('products.image') }}</span>
               <ProductAvatar :src="currentImage" :updated-at="currentImageUpdatedAt" :name="form.name" size="xl" shape="square" />
@@ -660,11 +748,11 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="grid gap-3 md:grid-cols-2">
-            <AppInput v-model="form.sku" :label="app.t('products.sku')" :error="fieldErrors.sku" />
-            <AppInput v-model="form.name" :label="app.t('products.name')" :error="fieldErrors.name" />
+            <AppInput v-model="form.sku" :label="app.t('products.sku')" :placeholder="app.t('products.skuPlaceholder')" :error="fieldErrors.sku" />
+            <AppInput v-model="form.name" :label="app.t('products.name')" :placeholder="app.t('products.namePlaceholder')" :error="fieldErrors.name" />
             <div class="grid gap-2 md:col-span-2">
               <AppInput v-model="form.barcode" :label="app.t('products.barcode')" :placeholder="app.t('products.barcodePlaceholder')" />
-              <div class="grid gap-2 sm:grid-cols-2 md:max-w-md">
+              <div class="grid gap-2 sm:grid-cols-2">
                 <AppButton class="w-full" type="button" variant="secondary" icon="scan-barcode" @click="openBarcodeScan">{{ app.t('products.scanBarcode') }}</AppButton>
                 <AppButton class="w-full" type="button" variant="secondary" icon="qr-code" @click="openCameraScanner">{{ app.t('products.cameraScan') }}</AppButton>
               </div>
@@ -673,23 +761,23 @@ onBeforeUnmount(() => {
               <option value="">{{ app.t('products.noCategory') }}</option>
               <option v-for="category in categories" :key="category.id" :value="String(category.id)">{{ category.name }}</option>
             </AppSelect>
-            <AppInput v-model="form.unit" :label="app.t('products.unit')" />
+            <AppInput v-model="form.unit" :label="app.t('products.unit')" :placeholder="app.t('products.unitPlaceholder')" />
           </div>
         </section>
 
         <section class="grid gap-3 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/45">
           <h3 class="text-sm font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('products.pricing') }}</h3>
           <div class="grid gap-3 md:grid-cols-2">
-            <AppInput v-model="form.selling_price" :label="app.t('products.sellingPrice')" type="number" />
-            <AppInput v-model="form.unit_cost" :label="app.t('products.unitCost')" type="number" />
+            <AppInput v-model="form.selling_price" :label="app.t('products.sellingPrice')" type="number" :placeholder="app.t('products.sellingPricePlaceholder')" />
+            <AppInput v-model="form.unit_cost" :label="app.t('products.unitCost')" type="number" :placeholder="app.t('products.unitCostPlaceholder')" />
           </div>
         </section>
 
         <section class="grid gap-3 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/45">
           <h3 class="text-sm font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('products.stockRules') }}</h3>
           <div class="grid gap-3 md:grid-cols-2">
-            <AppInput v-model="form.threshold" :label="app.t('products.threshold')" type="number" />
-            <AppInput v-model="form.reorder_point" :label="app.t('products.reorderPoint')" type="number" />
+            <AppInput v-model="form.threshold" :label="app.t('products.threshold')" type="number" :placeholder="app.t('products.thresholdPlaceholder')" />
+            <AppInput v-model="form.reorder_point" :label="app.t('products.reorderPoint')" type="number" :placeholder="app.t('products.reorderPointPlaceholder')" />
           </div>
           <AppCheckbox v-model="form.is_active" :label="app.t('products.active')" :description="app.t('products.status')" />
         </section>
@@ -702,12 +790,50 @@ onBeforeUnmount(() => {
       </form>
     </AppModal>
 
+    <ConfirmDialog
+      :open="saveConfirmOpen"
+      :title="saveConfirmTitle"
+      :message="saveConfirmMessage"
+      :confirm-label="app.t('products.confirm')"
+      :cancel-label="app.t('products.cancel')"
+      :destructive="false"
+      :loading="saving || imageSaving"
+      @close="saveConfirmOpen = false"
+      @confirm="save"
+    />
+
     <AppModal :open="importModalOpen" :title="app.t('products.importTitle')" :description="app.t('products.importDescription')" :close-label="app.t('products.cancel')" size="xl" @close="closeProductImport">
       <div class="grid gap-4">
         <section class="grid gap-5 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/45">
           <label class="grid gap-2 text-sm">
             <span class="font-semibold text-slate-700 dark:text-slate-200">{{ app.t('products.uploadCSV') }}</span>
-            <input class="min-h-14 w-full rounded-xl border border-dashed border-slate-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-900" type="file" accept=".csv,text/csv" @change="chooseImportFile" />
+            <label
+              class="group flex min-h-36 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-brand-700/25 bg-white/80 px-5 py-6 text-center transition hover:border-brand-600 hover:bg-brand-50/70 dark:border-brand-100/15 dark:bg-slate-950/45 dark:hover:border-brand-100/35 dark:hover:bg-brand-900/20">
+              <input class="sr-only" type="file" accept=".csv,text/csv" :disabled="importUploading || importConfirming"
+                @change="chooseImportFile" />
+              <span class="grid gap-1">
+                <span class="text-sm font-black text-slate-900 dark:text-slate-50">
+                  {{
+                    selectedImportFile
+                      ? selectedImportFile.name
+                      : app.t('products.chooseCSVFile')
+                  }}
+                </span>
+
+                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  {{
+                    selectedImportFile
+                      ? formatFileSize(selectedImportFile.size)
+                      : app.t('products.dragOrClickUpload')
+                  }}
+                </span>
+              </span>
+
+              <span
+                class="rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700 dark:bg-brand-100/10 dark:text-brand-100">
+                CSV only
+              </span>
+            </label>
             <span class="max-w-3xl text-xs leading-5 text-slate-500 dark:text-slate-400">{{ app.t('products.importColumnsHelp') }}</span>
           </label>
           <div class="flex flex-col gap-2 border-t border-slate-200 pt-4 dark:border-slate-800 sm:flex-row sm:flex-wrap sm:justify-end">
@@ -784,5 +910,28 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </AppModal>
+
+    <Teleport to="body">
+      <div
+        v-if="stockTooltipProductID && selectedProduct"
+        ref="stockTooltipRef"
+        class="fixed z-[120] w-72 rounded-xl bg-white p-3 text-left shadow-2xl shadow-slate-950/20 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30"
+        :style="stockTooltipStyle"
+        role="dialog"
+        :aria-label="app.t('products.locationStock')"
+      >
+        <p v-if="stockTooltipLoading" class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">{{ app.t('products.loading') }}</p>
+        <div v-else-if="selectedStocks.length" class="grid gap-2">
+          <div v-for="stock in selectedStocks" :key="stock.location_id" class="rounded-lg bg-slate-50 p-2 dark:bg-slate-950/60">
+            <div class="flex items-center justify-between gap-2 text-sm">
+              <span class="min-w-0 truncate font-semibold text-slate-800 dark:text-slate-100">{{ stock.location_name }}</span>
+              <span class="font-black text-brand-700 dark:text-emerald-200">{{ stock.quantity }}</span>
+            </div>
+            <span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold" :class="stockClass(stock.stock_status)">{{ stockLabel(stock.stock_status) }}</span>
+          </div>
+        </div>
+        <p v-else class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">{{ app.t('products.selectStock') }}</p>
+      </div>
+    </Teleport>
   </section>
 </template>
