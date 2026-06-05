@@ -99,6 +99,7 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 const roleModalOpen = ref(false)
+const saveConfirmOpen = ref(false)
 const confirmOpen = ref(false)
 const targetRole = ref<RoleRecord | null>(null)
 const form = reactive<RoleForm>({ id: 0, code: '', name: '', description: '', is_active: true })
@@ -112,6 +113,8 @@ const activeRoles = computed(() => roles.value.filter((role) => role.is_active).
 const inactiveRoles = computed(() => roles.value.length - activeRoles.value)
 const totalPermissions = computed(() => permissions.value.length)
 const allPermissionCodes = computed(() => permissions.value.map((permission) => permission.code))
+const saveConfirmTitle = computed(() => editing.value ? app.t('roles.confirmUpdateTitle') : app.t('roles.confirmCreateTitle'))
+const saveConfirmMessage = computed(() => t('roles.confirmSaveMessage', { name: form.name.trim() || form.code.trim() || app.t('roles.role') }))
 
 const filteredRoles = computed(() => {
   const query = roleSearch.value.trim().toLowerCase()
@@ -166,6 +169,12 @@ function resetForm() {
   error.value = ''
 }
 
+function t(key: TranslationKey, params: Record<string, string | number> = {}) {
+  let text = String(app.t(key))
+  for (const [name, value] of Object.entries(params)) text = text.replaceAll(`{${name}}`, String(value))
+  return text
+}
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -186,6 +195,13 @@ async function load() {
 function openCreateRole() {
   resetForm()
   roleModalOpen.value = true
+}
+
+function closeRoleModal(force = false) {
+  if (saving.value && !force) return
+  roleModalOpen.value = false
+  saveConfirmOpen.value = false
+  resetForm()
 }
 
 async function openEditRole(role: RoleRecord) {
@@ -232,14 +248,36 @@ function clearAllPermissions() {
   formPermissionCodes.value = []
 }
 
+function validateRole() {
+  if (!form.code.trim()) return app.t('roles.codeRequired')
+  if (!form.name.trim()) return app.t('roles.nameRequired')
+  return ''
+}
+
+function requestSaveRole() {
+  const validation = validateRole()
+  if (validation) {
+    error.value = validation
+    return
+  }
+  error.value = ''
+  saveConfirmOpen.value = true
+}
+
+function closeSaveConfirm() {
+  if (saving.value) return
+  saveConfirmOpen.value = false
+}
+
 async function saveRole() {
   saving.value = true
   error.value = ''
+  const toastMessage = editing.value ? app.t('roles.updated') : app.t('roles.created')
   try {
     const payload = {
-      code: form.code,
-      name: form.name,
-      description: form.description,
+      code: form.code.trim(),
+      name: form.name.trim(),
+      description: form.description.trim(),
       is_active: form.is_active,
     }
     const role = editing.value
@@ -251,8 +289,9 @@ async function saveRole() {
         body: JSON.stringify({ permission_codes: formPermissionCodes.value }),
       })
     }
-    app.pushToast({ type: 'success', message: editing.value ? app.t('roles.updated') : app.t('roles.created') })
-    roleModalOpen.value = false
+    saveConfirmOpen.value = false
+    closeRoleModal(true)
+    app.pushToast({ type: 'success', message: toastMessage })
     await load()
   } catch (err) {
     error.value = err instanceof Error ? err.message : app.t('roles.saveFailed')
@@ -323,20 +362,20 @@ onMounted(load)
               <th class="px-3 py-3 text-left">{{ app.t('roles.code') }}</th>
               <th class="px-3 py-3 text-right">{{ app.t('roles.permissions') }}</th>
               <th class="px-3 py-3 text-right">{{ app.t('roles.assignedUsers') }}</th>
-              <th class="px-3 py-3 text-left">{{ app.t('roles.status') }}</th>
+              <th class="px-3 py-3 pl-8 text-left">{{ app.t('roles.status') }}</th>
               <th class="px-3 py-3 text-right">{{ app.t('roles.actions') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
             <tr v-for="role in filteredRoles" :key="role.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
-              <td class="px-3 py-3">
+              <td class="px-3 py-3 pl-8">
                 <div class="font-black">{{ role.name }}</div>
                 <div class="mt-1 max-w-md truncate text-xs text-slate-500 dark:text-slate-400">{{ role.description || app.t('roles.noDescription') }}</div>
               </td>
               <td class="px-3 py-3"><AppBadge tone="neutral">{{ role.code }}</AppBadge></td>
               <td class="px-3 py-3 text-right font-black">{{ role.permission_count }}</td>
               <td class="px-3 py-3 text-right font-black">{{ role.user_count }}</td>
-              <td class="px-3 py-3">
+              <td class="px-3 py-3 pl-8">
                 <div class="flex flex-wrap gap-1">
                   <AppBadge v-if="role.is_system" tone="info">{{ app.t('roles.systemRole') }}</AppBadge>
                   <AppBadge :tone="roleStatusTone(role)">{{ role.is_active ? app.t('roles.active') : app.t('roles.inactive') }}</AppBadge>
@@ -344,7 +383,7 @@ onMounted(load)
               </td>
               <td class="px-3 py-3">
                 <div class="flex justify-end gap-2">
-                  <AppButton v-if="canUpdate" variant="secondary" icon="settings" @click="openEditRole(role)">{{ app.t('roles.edit') }}</AppButton>
+                  <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('roles.edit')" :aria-label="app.t('roles.edit')" @click="openEditRole(role)" />
                   <AppButton v-if="canDeactivate" :variant="role.is_active ? 'danger' : 'secondary'" icon="triangle-alert" @click="askDeactivate(role)">
                     {{ role.is_active ? app.t('roles.deactivate') : app.t('roles.activate') }}
                   </AppButton>
@@ -377,7 +416,7 @@ onMounted(load)
           </div>
           <div class="mt-3 flex flex-wrap gap-2">
             <AppBadge v-if="role.is_system" tone="info">{{ app.t('roles.systemRole') }}</AppBadge>
-            <AppButton v-if="canUpdate" variant="secondary" icon="settings" @click="openEditRole(role)">{{ app.t('roles.edit') }}</AppButton>
+            <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('roles.edit')" :aria-label="app.t('roles.edit')" @click="openEditRole(role)" />
             <AppButton v-if="canDeactivate" :variant="role.is_active ? 'danger' : 'secondary'" icon="triangle-alert" @click="askDeactivate(role)">
               {{ role.is_active ? app.t('roles.deactivate') : app.t('roles.activate') }}
             </AppButton>
@@ -386,14 +425,14 @@ onMounted(load)
       </div>
     </AppCard>
 
-    <AppModal :open="roleModalOpen" :title="editing ? app.t('roles.editTitle') : app.t('roles.createTitle')" :description="app.t('roles.roleModalDescription')" :close-label="app.t('roles.cancel')" size="xl" @close="roleModalOpen = false">
-      <form class="grid gap-5" @submit.prevent="saveRole">
+    <AppModal :open="roleModalOpen" :title="editing ? app.t('roles.editTitle') : app.t('roles.createTitle')" :description="app.t('roles.roleModalDescription')" :close-label="app.t('roles.cancel')" size="xl" @close="closeRoleModal">
+      <form class="grid gap-5" @submit.prevent="requestSaveRole">
         <section class="grid gap-3 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/45">
           <div class="grid gap-3 md:grid-cols-2">
-            <AppInput v-model="form.code" :label="app.t('roles.code')" placeholder="INVENTORY_STAFF" :disabled="editing" :helper="app.t('roles.codeHelper')" />
-            <AppInput v-model="form.name" :label="app.t('roles.name')" />
+            <AppInput v-model="form.code" :label="app.t('roles.code')" :placeholder="app.t('roles.codePlaceholder')" :disabled="editing" :helper="app.t('roles.codeHelper')" />
+            <AppInput v-model="form.name" :label="app.t('roles.name')" :placeholder="app.t('roles.namePlaceholder')" :helper="app.t('roles.nameHelper')" />
           </div>
-          <AppTextarea v-model="form.description" :label="app.t('roles.descriptionField')" />
+          <AppTextarea v-model="form.description" :label="app.t('roles.descriptionField')" :placeholder="app.t('roles.descriptionPlaceholder')" />
           <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <input v-model="form.is_active" type="checkbox" />
             {{ app.t('roles.active') }}
@@ -454,12 +493,23 @@ onMounted(load)
         </section>
 
         <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ error }}</div>
-        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <AppButton type="button" variant="secondary" :disabled="saving" @click="roleModalOpen = false">{{ app.t('roles.cancel') }}</AppButton>
+        <div class="sticky -bottom-6 z-30 -mx-5 -mb-5 flex flex-col-reverse gap-2 border-t border-slate-200 bg-white px-5 pb-6 pt-4 dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_-18px_30px_rgba(0,0,0,0.35)] sm:-mx-6 sm:-mb-6 sm:flex-row sm:justify-end sm:px-6">
+          <AppButton type="button" variant="secondary" :disabled="saving" @click="closeRoleModal()">{{ app.t('roles.cancel') }}</AppButton>
           <AppButton type="submit" :loading="saving" :disabled="saving || (editing ? !canUpdate : !canCreate)" icon="check-circle">{{ app.t('roles.save') }}</AppButton>
         </div>
       </form>
     </AppModal>
+
+    <ConfirmDialog
+      :open="saveConfirmOpen"
+      :title="saveConfirmTitle"
+      :message="saveConfirmMessage"
+      :confirm-label="app.t('roles.save')"
+      :cancel-label="app.t('roles.cancel')"
+      :loading="saving"
+      @close="closeSaveConfirm"
+      @confirm="saveRole"
+    />
 
     <ConfirmDialog
       :open="confirmOpen"

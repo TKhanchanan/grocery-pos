@@ -53,6 +53,8 @@ const supplierError = ref('')
 const poModalOpen = ref(false)
 const poDetailOpen = ref(false)
 const supplierModalOpen = ref(false)
+const poSaveConfirmOpen = ref(false)
+const supplierSaveConfirmOpen = ref(false)
 const editingPOID = ref<number | null>(null)
 const editingSupplierID = ref<number | null>(null)
 const poPage = ref(1)
@@ -111,6 +113,10 @@ const poSummary = computed(() => ({
   cancelled: purchaseOrders.value.filter((po) => po.status === 'CANCELLED').length,
 }))
 const poTotalCost = computed(() => poForm.items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_cost || 0), 0))
+const poSaveConfirmTitle = computed(() => editingPOID.value ? app.t('procurement.confirmUpdatePO') : app.t('procurement.confirmCreatePO'))
+const poSaveConfirmMessage = computed(() => editingPOID.value ? app.t('procurement.confirmUpdatePOMessage') : app.t('procurement.confirmCreatePOMessage'))
+const supplierSaveConfirmTitle = computed(() => editingSupplierID.value ? app.t('procurement.confirmUpdateSupplier') : app.t('procurement.confirmCreateSupplier'))
+const supplierSaveConfirmMessage = computed(() => editingSupplierID.value ? app.t('procurement.confirmUpdateSupplierMessage') : app.t('procurement.confirmCreateSupplierMessage'))
 
 function t(key: TranslationKey, params: Record<string, string | number> = {}) {
   let text = String(app.t(key))
@@ -151,8 +157,18 @@ function setTab(tab: ProcurementTab) {
   syncQuery(tab)
 }
 
-function defaultItem(): PurchaseOrderItem {
-  const product = products.value.find((item) => item.id === Number(route.query.product_id)) ?? products.value[0]
+function usedProductIDs(exceptIndex = -1) {
+  return new Set(poForm.items.map((item, index) => index === exceptIndex ? 0 : Number(item.product_id)).filter(Boolean))
+}
+
+function isProductSelected(productID: number, currentIndex: number) {
+  return usedProductIDs(currentIndex).has(productID)
+}
+
+function defaultItem(excludeSelected = false): PurchaseOrderItem {
+  const selectedIDs = excludeSelected ? usedProductIDs() : new Set<number>()
+  const routeProduct = products.value.find((item) => item.id === Number(route.query.product_id) && !selectedIDs.has(item.id))
+  const product = routeProduct ?? products.value.find((item) => !selectedIDs.has(item.id)) ?? products.value[0]
   return {
     product_id: product?.id ?? 0,
     quantity: 1,
@@ -186,14 +202,22 @@ function openEditPO(po: PurchaseOrder) {
   poModalOpen.value = true
 }
 
-function closePOModal() {
-  if (savingPO.value) return
+function closePOModal(force = false) {
+  if (savingPO.value && !force) return
   poModalOpen.value = false
+  poSaveConfirmOpen.value = false
   resetPOForm()
 }
 
 function addPOItem() {
-  poForm.items.push(defaultItem())
+  const nextItem = defaultItem(true)
+  if (Number(nextItem.product_id) && usedProductIDs().has(Number(nextItem.product_id))) {
+    poError.value = app.t('procurement.allProductsSelected')
+    app.pushToast({ type: 'warning', message: app.t('procurement.allProductsSelected') })
+    return
+  }
+  poError.value = ''
+  poForm.items.push(nextItem)
 }
 
 function removePOItem(index: number) {
@@ -210,22 +234,37 @@ function validatePO() {
   if (!poForm.supplier_id) return app.t('procurement.supplierRequired')
   if (!poForm.location_id) return app.t('procurement.locationRequired')
   if (poForm.items.length === 0) return app.t('procurement.itemsRequired')
+  const selected = new Set<number>()
   for (const item of poForm.items) {
-    if (!Number(item.product_id)) return app.t('procurement.productRequired')
+    const productID = Number(item.product_id)
+    if (!productID) return app.t('procurement.productRequired')
+    if (selected.has(productID)) return app.t('procurement.duplicateProduct')
+    selected.add(productID)
     if (Number(item.quantity) <= 0) return app.t('procurement.quantityRequired')
     if (Number(item.unit_cost) < 0) return app.t('procurement.costRequired')
   }
   return ''
 }
 
-async function savePO() {
+function requestSavePO() {
   const validation = validatePO()
   if (validation) {
     poError.value = validation
     return
   }
+  poError.value = ''
+  poSaveConfirmOpen.value = true
+}
+
+function closePOSaveConfirm() {
+  if (savingPO.value) return
+  poSaveConfirmOpen.value = false
+}
+
+async function savePO() {
   savingPO.value = true
   poError.value = ''
+  const successMessage = editingPOID.value ? app.t('procurement.poUpdated') : app.t('procurement.poCreated')
   try {
     const payload = {
       supplier_id: Number(poForm.supplier_id),
@@ -241,8 +280,9 @@ async function savePO() {
       ? await patchJSON<PurchaseOrder>(`/v1/purchase-orders/${editingPOID.value}`, payload)
       : await postJSON<PurchaseOrder>('/v1/purchase-orders', payload)
     await loadPurchaseOrders()
-    closePOModal()
-    app.pushToast({ type: 'success', message: editingPOID.value ? app.t('procurement.poUpdated') : app.t('procurement.poCreated') })
+    poSaveConfirmOpen.value = false
+    closePOModal(true)
+    app.pushToast({ type: 'success', message: successMessage })
   } catch (err) {
     poError.value = friendlyError(err, 'procurement.poSaveFailed')
     app.pushToast({ type: 'error', message: app.t('procurement.poSaveFailed'), description: poError.value })
@@ -272,8 +312,8 @@ function openPOConfirm(po: PurchaseOrder, action: POAction) {
   confirmState.action = action
 }
 
-function closeConfirm() {
-  if (confirming.value) return
+function closeConfirm(force = false) {
+  if (confirming.value && !force) return
   confirmState.type = ''
   confirmState.po = null
   confirmState.supplier = null
@@ -288,7 +328,7 @@ async function confirmPOAction() {
     selectedPO.value = await postJSON<PurchaseOrder>(`/v1/purchase-orders/${confirmState.po.id}/${confirmState.action}`, {})
     await loadPurchaseOrders()
     app.pushToast({ type: 'success', message: app.t(`procurement.${confirmState.action}Success` as TranslationKey) })
-    closeConfirm()
+    closeConfirm(true)
   } catch (err) {
     poError.value = friendlyError(err, 'procurement.poActionFailed')
     app.pushToast({ type: 'error', message: app.t('procurement.poActionFailed'), description: poError.value })
@@ -321,9 +361,10 @@ function openEditSupplier(supplier: Supplier) {
   supplierModalOpen.value = true
 }
 
-function closeSupplierModal() {
-  if (savingSupplier.value) return
+function closeSupplierModal(force = false) {
+  if (savingSupplier.value && !force) return
   supplierModalOpen.value = false
+  supplierSaveConfirmOpen.value = false
   resetSupplierForm()
 }
 
@@ -333,14 +374,25 @@ function validateSupplier() {
   return ''
 }
 
-async function saveSupplier() {
+function requestSaveSupplier() {
   const validation = validateSupplier()
   if (validation) {
     supplierError.value = validation
     return
   }
+  supplierError.value = ''
+  supplierSaveConfirmOpen.value = true
+}
+
+function closeSupplierSaveConfirm() {
+  if (savingSupplier.value) return
+  supplierSaveConfirmOpen.value = false
+}
+
+async function saveSupplier() {
   savingSupplier.value = true
   supplierError.value = ''
+  const successMessage = editingSupplierID.value ? app.t('procurement.supplierUpdated') : app.t('procurement.supplierCreated')
   try {
     const payload = {
       name: supplierForm.name.trim(),
@@ -354,8 +406,9 @@ async function saveSupplier() {
       await postJSON<Supplier>('/v1/suppliers', payload)
     }
     await loadSuppliers()
-    closeSupplierModal()
-    app.pushToast({ type: 'success', message: editingSupplierID.value ? app.t('procurement.supplierUpdated') : app.t('procurement.supplierCreated') })
+    supplierSaveConfirmOpen.value = false
+    closeSupplierModal(true)
+    app.pushToast({ type: 'success', message: successMessage })
   } catch (err) {
     supplierError.value = friendlyError(err, 'procurement.supplierSaveFailed')
     app.pushToast({ type: 'error', message: app.t('procurement.supplierSaveFailed'), description: supplierError.value })
@@ -379,7 +432,7 @@ async function confirmSupplierStatus() {
     await patchJSON<Supplier>(`/v1/suppliers/${confirmState.supplier.id}/status`, { is_active: !confirmState.supplier.is_active })
     await loadSuppliers()
     app.pushToast({ type: 'success', message: app.t('procurement.supplierStatusUpdated') })
-    closeConfirm()
+    closeConfirm(true)
   } catch (err) {
     supplierError.value = friendlyError(err, 'procurement.supplierStatusFailed')
     app.pushToast({ type: 'error', message: app.t('procurement.supplierStatusFailed'), description: supplierError.value })
@@ -497,8 +550,8 @@ watch(() => route.query.tab, alignTabWithRoute)
                     <th class="px-3 py-3 text-left">{{ app.t('procurement.status') }}</th>
                     <th class="px-3 py-3 text-right">{{ app.t('procurement.items') }}</th>
                     <th class="px-3 py-3 text-right">{{ app.t('procurement.total') }}</th>
-                    <th class="px-3 py-3 text-left">{{ app.t('procurement.createdDate') }}</th>
-                    <th class="px-3 py-3 text-left">{{ app.t('procurement.actions') }}</th>
+                    <th class="px-3 py-3 pl-8 text-left">{{ app.t('procurement.createdDate') }}</th>
+                    <th class="px-3 py-3 text-right">{{ app.t('procurement.actions') }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -511,11 +564,11 @@ watch(() => route.query.tab, alignTabWithRoute)
                     <td class="px-3 py-3"><AppBadge :tone="statusTone(po.status)">{{ statusLabel(po.status) }}</AppBadge></td>
                     <td class="px-3 py-3 text-right">{{ po.items.length.toLocaleString(locale) }}</td>
                     <td class="px-3 py-3 text-right font-semibold">{{ money(po.total_cost) }}</td>
-                    <td class="px-3 py-3">{{ formatDate(po.created_at) }}</td>
+                    <td class="px-3 py-3 pl-8">{{ formatDate(po.created_at) }}</td>
                     <td class="px-3 py-3">
-                      <div class="flex flex-wrap gap-2">
+                      <div class="flex flex-wrap justify-end gap-2">
                         <AppButton variant="secondary" @click="showPO(po)">{{ app.t('procurement.detail') }}</AppButton>
-                        <AppButton v-if="po.status === 'DRAFT' && canUpdatePO" variant="secondary" @click="openEditPO(po)">{{ app.t('procurement.edit') }}</AppButton>
+                        <AppButton v-if="po.status === 'DRAFT' && canUpdatePO" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('procurement.edit')" :aria-label="app.t('procurement.edit')" @click="openEditPO(po)" />
                         <AppButton v-if="po.status === 'DRAFT' && canSendPO" @click="openPOConfirm(po, 'send')">{{ app.t('procurement.sendPO') }}</AppButton>
                         <AppButton v-if="(po.status === 'DRAFT' || po.status === 'SENT') && canReceivePO" @click="openPOConfirm(po, 'receive')">{{ app.t('procurement.receivePO') }}</AppButton>
                         <AppButton v-if="(po.status === 'DRAFT' || po.status === 'SENT') && canCancelPO" variant="danger" @click="openPOConfirm(po, 'cancel')">{{ app.t('procurement.cancelPO') }}</AppButton>
@@ -542,7 +595,7 @@ watch(() => route.query.tab, alignTabWithRoute)
                 </dl>
                 <div class="mt-3 flex flex-wrap gap-2">
                   <AppButton variant="secondary" @click="showPO(po)">{{ app.t('procurement.detail') }}</AppButton>
-                  <AppButton v-if="po.status === 'DRAFT' && canUpdatePO" variant="secondary" @click="openEditPO(po)">{{ app.t('procurement.edit') }}</AppButton>
+                  <AppButton v-if="po.status === 'DRAFT' && canUpdatePO" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('procurement.edit')" :aria-label="app.t('procurement.edit')" @click="openEditPO(po)" />
                   <AppButton v-if="po.status === 'DRAFT' && canSendPO" @click="openPOConfirm(po, 'send')">{{ app.t('procurement.sendPO') }}</AppButton>
                   <AppButton v-if="(po.status === 'DRAFT' || po.status === 'SENT') && canReceivePO" @click="openPOConfirm(po, 'receive')">{{ app.t('procurement.receivePO') }}</AppButton>
                   <AppButton v-if="(po.status === 'DRAFT' || po.status === 'SENT') && canCancelPO" variant="danger" @click="openPOConfirm(po, 'cancel')">{{ app.t('procurement.cancelPO') }}</AppButton>
@@ -596,8 +649,8 @@ watch(() => route.query.tab, alignTabWithRoute)
                     <th class="px-3 py-3 text-left">{{ app.t('procurement.address') }}</th>
                     <th class="px-3 py-3 text-left">{{ app.t('procurement.phone') }}</th>
                     <th class="px-3 py-3 text-left">{{ app.t('procurement.email') }}</th>
-                    <th class="px-3 py-3 text-left">{{ app.t('procurement.status') }}</th>
-                    <th class="px-3 py-3 text-left">{{ app.t('procurement.actions') }}</th>
+                    <th class="px-3 py-3 text-right">{{ app.t('procurement.status') }}</th>
+                    <th class="px-3 py-3 text-right">{{ app.t('procurement.actions') }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -606,10 +659,10 @@ watch(() => route.query.tab, alignTabWithRoute)
                     <td class="px-3 py-3">{{ supplier.address || '-' }}</td>
                     <td class="px-3 py-3">{{ supplier.phone || '-' }}</td>
                     <td class="px-3 py-3">{{ supplier.email || '-' }}</td>
-                    <td class="px-3 py-3"><AppBadge :tone="supplier.is_active ? 'success' : 'neutral'">{{ supplier.is_active ? app.t('procurement.active') : app.t('procurement.inactive') }}</AppBadge></td>
+                    <td class="px-3 py-3 text-right"><AppBadge :tone="supplier.is_active ? 'success' : 'neutral'">{{ supplier.is_active ? app.t('procurement.active') : app.t('procurement.inactive') }}</AppBadge></td>
                     <td class="px-3 py-3">
-                      <div class="flex flex-wrap gap-2">
-                        <AppButton v-if="canUpdateSupplier" variant="secondary" @click="openEditSupplier(supplier)">{{ app.t('procurement.edit') }}</AppButton>
+                      <div class="flex flex-wrap justify-end gap-2">
+                        <AppButton v-if="canUpdateSupplier" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('procurement.edit')" :aria-label="app.t('procurement.edit')" @click="openEditSupplier(supplier)" />
                         <AppButton v-if="canDeactivateSupplier" :variant="supplier.is_active ? 'danger' : 'secondary'" @click="openSupplierConfirm(supplier)">
                           {{ supplier.is_active ? app.t('procurement.deactivate') : app.t('procurement.activate') }}
                         </AppButton>
@@ -631,7 +684,7 @@ watch(() => route.query.tab, alignTabWithRoute)
                 </div>
                 <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ supplier.address || app.t('procurement.noAddress') }}</p>
                 <div class="mt-3 flex flex-wrap gap-2">
-                  <AppButton v-if="canUpdateSupplier" variant="secondary" @click="openEditSupplier(supplier)">{{ app.t('procurement.edit') }}</AppButton>
+                  <AppButton v-if="canUpdateSupplier" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('procurement.edit')" :aria-label="app.t('procurement.edit')" @click="openEditSupplier(supplier)" />
                   <AppButton v-if="canDeactivateSupplier" :variant="supplier.is_active ? 'danger' : 'secondary'" @click="openSupplierConfirm(supplier)">
                     {{ supplier.is_active ? app.t('procurement.deactivate') : app.t('procurement.activate') }}
                   </AppButton>
@@ -658,8 +711,8 @@ watch(() => route.query.tab, alignTabWithRoute)
     </div>
 
     <AppModal :open="poModalOpen" :title="editingPOID ? app.t('procurement.editPO') : app.t('procurement.createPO')" :description="app.t('procurement.poModalDescription')" :close-label="app.t('procurement.cancel')" size="xl" @close="closePOModal">
-      <form class="grid gap-4" @submit.prevent="savePO">
-        <div class="grid gap-3 md:grid-cols-2">
+      <form class="grid gap-4" @submit.prevent="requestSavePO">
+        <div class="grid gap-3">
           <AppSelect v-model="poForm.supplier_id" :label="app.t('procurement.supplier')">
             <option value="">{{ app.t('procurement.selectSupplier') }}</option>
             <option v-for="supplier in activeSuppliers" :key="supplier.id" :value="String(supplier.id)">{{ supplier.name }}</option>
@@ -668,26 +721,28 @@ watch(() => route.query.tab, alignTabWithRoute)
             <option value="">{{ app.t('procurement.selectLocation') }}</option>
             <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
           </AppSelect>
-          <AppTextarea v-model="poForm.note" class="md:col-span-2" :label="app.t('procurement.note')" />
+          <AppTextarea v-model="poForm.note" :label="app.t('procurement.note')" :placeholder="app.t('procurement.notePlaceholder')" />
         </div>
 
-        <section class="grid gap-3 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/45">
+        <section class="grid max-h-[48vh] gap-3 overflow-y-auto rounded-2xl bg-slate-50/80 p-4 pr-2 dark:bg-slate-950/45">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 class="text-sm font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('procurement.items') }}</h3>
             <AppButton type="button" variant="secondary" icon="plus" @click="addPOItem">{{ app.t('procurement.addItem') }}</AppButton>
           </div>
           <article v-for="(item, index) in poForm.items" :key="index" class="rounded-xl border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-900/60">
-            <div class="grid gap-3 md:grid-cols-[1fr_100px_130px_auto] md:items-end">
+            <div class="grid gap-3">
               <AppSelect v-model="item.product_id" :label="app.t('procurement.product')" @update:model-value="syncProductCost(item)">
-                <option v-for="product in products" :key="product.id" :value="product.id">{{ product.name }} · {{ product.sku }}</option>
+                <option v-for="product in products" :key="product.id" :value="product.id" :disabled="isProductSelected(product.id, index)">{{ product.name }} · {{ product.sku }}</option>
               </AppSelect>
-              <AppInput v-model="item.quantity" :label="app.t('procurement.quantity')" type="number" />
-              <AppInput v-model="item.unit_cost" :label="app.t('procurement.unitCost')" type="number" />
-              <AppButton type="button" variant="danger" @click="removePOItem(index)">{{ app.t('procurement.remove') }}</AppButton>
+              <div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <AppInput v-model="item.quantity" :label="app.t('procurement.quantity')" type="number" :placeholder="app.t('procurement.quantityPlaceholder')" />
+                <AppInput v-model="item.unit_cost" :label="app.t('procurement.unitCost')" type="number" :placeholder="app.t('procurement.unitCostPlaceholder')" />
+                <AppButton type="button" variant="danger" @click="removePOItem(index)">{{ app.t('procurement.remove') }}</AppButton>
+              </div>
             </div>
             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ app.t('procurement.lineCost') }}: {{ money(Number(item.quantity || 0) * Number(item.unit_cost || 0)) }}</p>
           </article>
-          <div class="rounded-xl bg-white/70 p-3 text-sm font-bold dark:bg-slate-900/70">{{ app.t('procurement.total') }}: {{ money(poTotalCost) }}</div>
+          <div class="sticky bottom-0 rounded-xl border border-slate-200 bg-white/95 p-3 text-sm font-bold shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">{{ app.t('procurement.total') }}: {{ money(poTotalCost) }}</div>
         </section>
 
         <div v-if="poError" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ poError }}</div>
@@ -743,12 +798,12 @@ watch(() => route.query.tab, alignTabWithRoute)
     </AppModal>
 
     <AppModal :open="supplierModalOpen" :title="editingSupplierID ? app.t('procurement.editSupplier') : app.t('procurement.createSupplier')" :description="app.t('procurement.supplierModalDescription')" :close-label="app.t('procurement.cancel')" size="lg" @close="closeSupplierModal">
-      <form class="grid gap-4" @submit.prevent="saveSupplier">
-        <div class="grid gap-3 md:grid-cols-2">
-          <AppInput v-model="supplierForm.name" :label="app.t('procurement.supplierName')" />
-          <AppInput v-model="supplierForm.phone" :label="app.t('procurement.phone')" />
-          <AppInput v-model="supplierForm.email" :label="app.t('procurement.email')" />
-          <AppTextarea v-model="supplierForm.address" :label="app.t('procurement.address')" />
+      <form class="grid gap-4" @submit.prevent="requestSaveSupplier">
+        <div class="grid gap-3">
+          <AppInput v-model="supplierForm.name" :label="app.t('procurement.supplierName')" :placeholder="app.t('procurement.supplierNamePlaceholder')" />
+          <AppInput v-model="supplierForm.phone" :label="app.t('procurement.phone')" :placeholder="app.t('procurement.phonePlaceholder')" />
+          <AppInput v-model="supplierForm.email" :label="app.t('procurement.email')" :placeholder="app.t('procurement.emailPlaceholder')" />
+          <AppTextarea v-model="supplierForm.address" :label="app.t('procurement.address')" :placeholder="app.t('procurement.addressPlaceholder')" />
         </div>
         <div v-if="supplierError" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ supplierError }}</div>
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -757,6 +812,28 @@ watch(() => route.query.tab, alignTabWithRoute)
         </div>
       </form>
     </AppModal>
+
+    <ConfirmDialog
+      :open="poSaveConfirmOpen"
+      :title="poSaveConfirmTitle"
+      :message="poSaveConfirmMessage"
+      :confirm-label="editingPOID ? app.t('procurement.save') : app.t('procurement.createDraft')"
+      :cancel-label="app.t('procurement.cancel')"
+      :loading="savingPO"
+      @close="closePOSaveConfirm"
+      @confirm="savePO"
+    />
+
+    <ConfirmDialog
+      :open="supplierSaveConfirmOpen"
+      :title="supplierSaveConfirmTitle"
+      :message="supplierSaveConfirmMessage"
+      :confirm-label="app.t('procurement.save')"
+      :cancel-label="app.t('procurement.cancel')"
+      :loading="savingSupplier"
+      @close="closeSupplierSaveConfirm"
+      @confirm="saveSupplier"
+    />
 
     <ConfirmDialog
       :open="confirmState.type === 'po-action'"

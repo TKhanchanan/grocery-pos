@@ -88,7 +88,7 @@ const currentLanguage = computed(() => languageOptions.find((option) => option.v
 const currentTextSize = computed(() => textSizeOptions.find((option) => option.value === app.textSize) ?? textSizeOptions[1])
 const activeNavPath = computed(() => route.name === 'receipt-detail' || route.name === 'sale-receipt' ? '/sales-history' : route.path)
 const canViewAlerts = computed(() => auth.hasPermission('alerts.view'))
-const alertBadgeLabel = computed(() => app.alertCount > 99 ? '99+' : String(app.alertCount))
+const alertBadgeLabel = computed(() => app.alertCount > 9 ? '9+' : String(app.alertCount))
 const dropdownAlerts = computed(() => latestAlerts.value.slice(0, 5))
 
 function isActive(to: string) {
@@ -262,7 +262,7 @@ watch(() => route.path, () => {
               <AppIcon v-if="item.icon" :name="item.icon" :size="20" />
               <span :class="app.sidebarCollapsed ? 'sr-only' : 'truncate'">{{ app.t(item.labelKey) }}</span>
               <span v-if="item.to === '/alerts' && app.alertCount" :class="app.sidebarCollapsed ? 'absolute right-1 top-1' : 'ml-auto'">
-                <AppBadge>{{ app.alertCount }}</AppBadge>
+                <AppBadge>{{ alertBadgeLabel }}</AppBadge>
               </span>
             </RouterLink>
           </section>
@@ -292,7 +292,7 @@ watch(() => route.path, () => {
             <span class="flex items-center justify-start gap-3">
               <AppIcon v-if="item.icon" :name="item.icon" :size="19" />
               <span>{{ app.t(item.labelKey) }}</span>
-              <AppBadge v-if="item.to === '/alerts' && app.alertCount">{{ app.alertCount }}</AppBadge>
+              <AppBadge v-if="item.to === '/alerts' && app.alertCount">{{ alertBadgeLabel }}</AppBadge>
             </span>
           </RouterLink>
         </section>
@@ -367,7 +367,7 @@ watch(() => route.path, () => {
                   {{ alertBadgeLabel }}
                 </span>
               </button>
-              <div v-if="notificationsOpen" class="absolute right-0 z-40 mt-2 w-[calc(100vw-2rem)] max-w-[360px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/15 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30">
+              <div v-if="notificationsOpen" class="absolute right-0 z-40 mt-2 w-[calc(100vw-2rem)] max-w-[360px] overflow-hidden rounded-2xl bg-white shadow-2xl shadow-slate-950/15 dark:bg-slate-900 dark:shadow-black/30">
                 <div class="flex items-start justify-between gap-3 border-b border-slate-100 p-4 dark:border-slate-800">
                   <div>
                     <p class="text-sm font-black">{{ app.t('topbar.notifications') }}</p>

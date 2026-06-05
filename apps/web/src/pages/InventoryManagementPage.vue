@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiClient, patchJSON, postJSON } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
@@ -58,6 +58,13 @@ const locationError = ref('')
 const transferError = ref('')
 const locationModalOpen = ref(false)
 const transferModalOpen = ref(false)
+const locationSaveConfirmOpen = ref(false)
+const transferSaveConfirmOpen = ref(false)
+const transferTooltipID = ref<number | null>(null)
+const transferTooltipLoading = ref(false)
+const transferTooltipRef = ref<HTMLElement | null>(null)
+const transferTooltipAnchor = ref<HTMLElement | null>(null)
+const transferTooltipPosition = reactive({ top: 0, left: 0 })
 const locationSubmitting = ref(false)
 const transferSubmitting = ref(false)
 const confirmSubmitting = ref(false)
@@ -115,6 +122,12 @@ const transferSummary = computed(() => ({
 }))
 const locationConfirmOpen = computed(() => Boolean(pendingLocation.value))
 const transferConfirmOpen = computed(() => Boolean(pendingTransfer.value))
+const locationSaveConfirmTitle = computed(() => locationForm.id ? app.t('inventory.locations.confirmUpdateTitle') : app.t('inventory.locations.confirmCreateTitle'))
+const locationSaveConfirmMessage = computed(() => t('inventory.locations.confirmSaveMessage', { name: locationForm.name.trim() || app.t('inventory.locations.name') }))
+const transferTooltipStyle = computed(() => ({
+  top: `${transferTooltipPosition.top}px`,
+  left: `${transferTooltipPosition.left}px`,
+}))
 
 function t(key: TranslationKey, params: Record<string, string | number> = {}) {
   let text = String(app.t(key))
@@ -245,20 +258,38 @@ function openEditLocation(location: Location) {
   locationModalOpen.value = true
 }
 
-async function saveLocation() {
+function closeLocationModal(force = false) {
+  if (locationSubmitting.value && !force) return
+  locationModalOpen.value = false
+  locationSaveConfirmOpen.value = false
+  resetLocationForm()
+}
+
+function requestSaveLocation() {
   if (!locationForm.name.trim()) {
     locationError.value = app.t('inventory.locations.nameRequired')
     return
   }
+  locationError.value = ''
+  locationSaveConfirmOpen.value = true
+}
+
+function closeLocationSaveConfirm() {
+  if (locationSubmitting.value) return
+  locationSaveConfirmOpen.value = false
+}
+
+async function saveLocation() {
   locationSubmitting.value = true
   locationError.value = ''
+  const toastMessage = locationForm.id ? app.t('inventory.locations.updateSuccess') : app.t('inventory.locations.createSuccess')
   try {
     const payload = { name: locationForm.name.trim(), description: locationForm.description.trim() }
     if (locationForm.id) await patchJSON<Location>(`/v1/locations/${locationForm.id}`, payload)
     else await postJSON<Location>('/v1/locations', payload)
-    app.pushToast({ type: 'success', message: locationForm.id ? app.t('inventory.locations.updateSuccess') : app.t('inventory.locations.createSuccess') })
-    locationModalOpen.value = false
-    resetLocationForm()
+    locationSaveConfirmOpen.value = false
+    closeLocationModal(true)
+    app.pushToast({ type: 'success', message: toastMessage })
     await loadLocations()
   } catch (err) {
     locationError.value = friendlyError(err, 'inventory.locations.saveFailed')
@@ -308,6 +339,13 @@ async function openCreateTransfer() {
   transferModalOpen.value = true
 }
 
+function closeTransferModal(force = false) {
+  if (transferSubmitting.value && !force) return
+  transferModalOpen.value = false
+  transferSaveConfirmOpen.value = false
+  resetTransferForm()
+}
+
 function validateTransfer() {
   if (!transferForm.from_location_id || !transferForm.to_location_id) return app.t('inventory.transfers.locationsRequired')
   if (transferForm.from_location_id === transferForm.to_location_id) return app.t('inventory.transfers.sameLocation')
@@ -317,12 +355,22 @@ function validateTransfer() {
   return ''
 }
 
-async function createTransfer() {
+function requestCreateTransfer() {
   const validation = validateTransfer()
   if (validation) {
     transferError.value = validation
     return
   }
+  transferError.value = ''
+  transferSaveConfirmOpen.value = true
+}
+
+function closeTransferSaveConfirm() {
+  if (transferSubmitting.value) return
+  transferSaveConfirmOpen.value = false
+}
+
+async function createTransfer() {
   transferSubmitting.value = true
   transferError.value = ''
   try {
@@ -332,10 +380,10 @@ async function createTransfer() {
       note: transferForm.note.trim(),
       items: [{ product_id: Number(transferForm.product_id), quantity: Number(transferForm.quantity) }],
     })
+    transferSaveConfirmOpen.value = false
     app.pushToast({ type: 'success', message: app.t('inventory.transfers.createSuccess'), description: transfer.transfer_no })
     selectedTransfer.value = transfer
-    transferModalOpen.value = false
-    resetTransferForm()
+    closeTransferModal(true)
     transferPage.value = 1
     await loadTransfers()
   } catch (err) {
@@ -346,8 +394,57 @@ async function createTransfer() {
   }
 }
 
-async function openTransferDetail(transfer: StockTransfer) {
-  selectedTransfer.value = await apiClient<StockTransfer>(`/v1/stock-transfers/${transfer.id}`)
+function closeTransferTooltip() {
+  transferTooltipID.value = null
+  transferTooltipAnchor.value = null
+}
+
+function positionTransferTooltip(target: HTMLElement, tooltip?: HTMLElement | null) {
+  const rect = target.getBoundingClientRect()
+  const width = 320
+  const height = tooltip?.offsetHeight || 220
+  const gap = 8
+  transferTooltipPosition.left = Math.max(16, Math.min(window.innerWidth - width - 16, rect.right - width))
+  transferTooltipPosition.top = Math.max(16, Math.min(window.innerHeight - height - 16, rect.top))
+  if (rect.bottom + height + gap <= window.innerHeight) transferTooltipPosition.top = rect.bottom + gap
+}
+
+function handleDocumentPointerDown(event: MouseEvent) {
+  const target = event.target as HTMLElement | null
+  if (!target || !transferTooltipID.value) return
+  if (transferTooltipRef.value?.contains(target) || target.closest('[data-transfer-tooltip-trigger]')) return
+  closeTransferTooltip()
+}
+
+function handleTooltipViewportChange() {
+  if (!transferTooltipID.value || !transferTooltipAnchor.value) return
+  positionTransferTooltip(transferTooltipAnchor.value, transferTooltipRef.value)
+}
+
+async function openTransferDetail(event: MouseEvent, transfer: StockTransfer) {
+  const target = event.currentTarget as HTMLElement
+  if (transferTooltipID.value === transfer.id) {
+    closeTransferTooltip()
+    return
+  }
+  selectedTransfer.value = transfer
+  transferTooltipAnchor.value = target
+  positionTransferTooltip(target)
+  transferTooltipID.value = transfer.id
+  transferTooltipLoading.value = true
+  await nextTick()
+  positionTransferTooltip(target, transferTooltipRef.value)
+  try {
+    selectedTransfer.value = await apiClient<StockTransfer>(`/v1/stock-transfers/${transfer.id}`)
+    await nextTick()
+    if (transferTooltipAnchor.value) positionTransferTooltip(transferTooltipAnchor.value, transferTooltipRef.value)
+  } catch (err) {
+    transferError.value = friendlyError(err, 'inventory.transfers.loadFailed')
+    closeTransferTooltip()
+    app.pushToast({ type: 'error', message: app.t('inventory.transfers.loadFailed'), description: transferError.value })
+  } finally {
+    transferTooltipLoading.value = false
+  }
 }
 
 function confirmTransferAction(transfer: StockTransfer, action: TransferAction) {
@@ -389,8 +486,17 @@ watch([transferPage, transferPageSize], () => {
 })
 
 onMounted(() => {
+  document.addEventListener('mousedown', handleDocumentPointerDown)
+  window.addEventListener('resize', handleTooltipViewportChange)
+  window.addEventListener('scroll', handleTooltipViewportChange, true)
   syncActiveTabFromRoute()
   loadActiveTab()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleDocumentPointerDown)
+  window.removeEventListener('resize', handleTooltipViewportChange)
+  window.removeEventListener('scroll', handleTooltipViewportChange, true)
 })
 </script>
 
@@ -437,7 +543,7 @@ onMounted(() => {
                 <td class="px-3 py-3 text-slate-500 dark:text-slate-300">{{ formatDate(location.created_at) }}</td>
                 <td class="px-3 py-3">
                   <div class="flex justify-end gap-2">
-                    <AppButton v-if="canUpdateLocation" variant="secondary" @click="openEditLocation(location)">{{ app.t('inventory.edit') }}</AppButton>
+                    <AppButton v-if="canUpdateLocation" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('inventory.edit')" :aria-label="app.t('inventory.edit')" @click="openEditLocation(location)" />
                     <AppButton
                       v-if="canDeactivateLocation"
                       :variant="location.is_active ? 'danger' : 'secondary'"
@@ -502,7 +608,7 @@ onMounted(() => {
                   <td class="px-3 py-3 text-slate-500 dark:text-slate-300">{{ formatDate(transfer.created_at) }}</td>
                   <td class="px-3 py-3">
                     <div class="flex justify-end gap-2">
-                      <AppButton variant="secondary" @click="openTransferDetail(transfer)">{{ app.t('inventory.view') }}</AppButton>
+                      <AppButton data-transfer-tooltip-trigger class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="info" :title="app.t('inventory.view')" :aria-label="app.t('inventory.view')" @click="openTransferDetail($event, transfer)" />
                       <AppButton v-if="transfer.status === 'DRAFT' && canCompleteTransfer" icon="check-circle" @click="confirmTransferAction(transfer, 'complete')">{{ app.t('inventory.transfers.complete') }}</AppButton>
                       <AppButton v-if="transfer.status === 'DRAFT' && canCancelTransfer" variant="danger" icon="circle-x" @click="confirmTransferAction(transfer, 'cancel')">{{ app.t('inventory.transfers.cancel') }}</AppButton>
                     </div>
@@ -527,29 +633,6 @@ onMounted(() => {
         </div>
       </AppCard>
 
-      <AppCard v-if="selectedTransfer" class="dark:bg-slate-900/80">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">{{ app.t('inventory.transfers.detail') }}</p>
-            <h3 class="mt-1 text-lg font-black text-slate-950 dark:text-slate-50">{{ selectedTransfer.transfer_no }}</h3>
-            <p class="text-sm text-slate-500 dark:text-slate-300">{{ selectedTransfer.from_location_name }} -> {{ selectedTransfer.to_location_name }}</p>
-          </div>
-          <AppBadge :tone="transferStatusTone(selectedTransfer.status)">{{ transferStatusLabel(selectedTransfer.status) }}</AppBadge>
-        </div>
-        <div class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
-          <div v-for="item in selectedTransfer.items" :key="item.id ?? item.product_id" class="flex items-center justify-between gap-3 py-3">
-            <div class="flex items-center gap-3">
-              <ProductAvatar :src="productByID(item.product_id)?.image_url" :updated-at="productByID(item.product_id)?.image_updated_at" :name="item.product_name" size="md" />
-              <div>
-                <div class="font-bold text-slate-900 dark:text-slate-50">{{ item.product_name }}</div>
-                <div class="text-xs text-slate-500">{{ item.sku }}</div>
-              </div>
-            </div>
-            <div class="font-black text-slate-950 dark:text-slate-50">{{ item.quantity.toLocaleString(locale) }}</div>
-          </div>
-        </div>
-        <p v-if="selectedTransfer.note" class="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">{{ selectedTransfer.note }}</p>
-      </AppCard>
     </section>
 
     <AppModal
@@ -557,13 +640,13 @@ onMounted(() => {
       size="lg"
       :title="locationForm.id ? app.t('inventory.locations.editTitle') : app.t('inventory.locations.createTitle')"
       :description="app.t('inventory.locations.modalDescription')"
-      @close="locationModalOpen = false"
+      @close="closeLocationModal"
     >
-      <form class="space-y-4" @submit.prevent="saveLocation">
+      <form class="space-y-4" @submit.prevent="requestSaveLocation">
         <AppInput v-model="locationForm.name" :label="app.t('inventory.locations.name')" :placeholder="app.t('inventory.locations.namePlaceholder')" />
         <AppTextarea v-model="locationForm.description" :label="app.t('inventory.locations.description')" :placeholder="app.t('inventory.locations.descriptionPlaceholder')" />
         <div class="flex justify-end gap-2">
-          <AppButton variant="secondary" :disabled="locationSubmitting" @click="locationModalOpen = false">{{ app.t('inventory.cancel') }}</AppButton>
+          <AppButton variant="secondary" :disabled="locationSubmitting" @click="closeLocationModal">{{ app.t('inventory.cancel') }}</AppButton>
           <AppButton type="submit" icon="check-circle" :loading="locationSubmitting">{{ app.t('inventory.save') }}</AppButton>
         </div>
       </form>
@@ -574,9 +657,9 @@ onMounted(() => {
       size="xl"
       :title="app.t('inventory.transfers.createTitle')"
       :description="app.t('inventory.transfers.modalDescription')"
-      @close="transferModalOpen = false"
+      @close="closeTransferModal"
     >
-      <form class="space-y-5" @submit.prevent="createTransfer">
+      <form class="space-y-5" @submit.prevent="requestCreateTransfer">
         <div class="grid gap-4 md:grid-cols-2">
           <AppSelect v-model="transferForm.from_location_id" :label="app.t('inventory.transfers.source')">
             <option value="">{{ app.t('inventory.select') }}</option>
@@ -590,7 +673,7 @@ onMounted(() => {
             <option value="">{{ app.t('inventory.select') }}</option>
             <option v-for="product in activeProducts" :key="product.id" :value="String(product.id)">{{ product.sku }} - {{ product.name }}</option>
           </AppSelect>
-          <AppInput v-model="transferForm.quantity" type="number" :label="app.t('inventory.transfers.quantity')" />
+          <AppInput v-model="transferForm.quantity" type="number" min="1" step="1" :label="app.t('inventory.transfers.quantity')" :placeholder="app.t('inventory.transfers.quantityPlaceholder')" />
         </div>
 
         <div class="grid gap-3 md:grid-cols-[1.3fr_1fr_1fr]">
@@ -619,11 +702,33 @@ onMounted(() => {
         <AppTextarea v-model="transferForm.note" :label="app.t('inventory.transfers.note')" :placeholder="app.t('inventory.transfers.notePlaceholder')" />
         <div v-if="transferError" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">{{ transferError }}</div>
         <div class="flex justify-end gap-2">
-          <AppButton variant="secondary" :disabled="transferSubmitting" @click="transferModalOpen = false">{{ app.t('inventory.cancel') }}</AppButton>
+          <AppButton variant="secondary" :disabled="transferSubmitting" @click="closeTransferModal">{{ app.t('inventory.cancel') }}</AppButton>
           <AppButton type="submit" icon="check-circle" :loading="transferSubmitting">{{ app.t('inventory.transfers.saveDraft') }}</AppButton>
         </div>
       </form>
     </AppModal>
+
+    <ConfirmDialog
+      :open="locationSaveConfirmOpen"
+      :title="locationSaveConfirmTitle"
+      :message="locationSaveConfirmMessage"
+      :confirm-label="app.t('inventory.save')"
+      :cancel-label="app.t('inventory.cancel')"
+      :loading="locationSubmitting"
+      @close="closeLocationSaveConfirm"
+      @confirm="saveLocation"
+    />
+
+    <ConfirmDialog
+      :open="transferSaveConfirmOpen"
+      :title="app.t('inventory.transfers.confirmCreateTitle')"
+      :message="t('inventory.transfers.confirmCreateMessage', { product: selectedProduct?.name ?? app.t('inventory.transfers.product'), quantity: Number(transferForm.quantity || 0).toLocaleString(locale) })"
+      :confirm-label="app.t('inventory.transfers.saveDraft')"
+      :cancel-label="app.t('inventory.cancel')"
+      :loading="transferSubmitting"
+      @close="closeTransferSaveConfirm"
+      @confirm="createTransfer"
+    />
 
     <ConfirmDialog
       :open="locationConfirmOpen"
@@ -648,5 +753,42 @@ onMounted(() => {
       @close="pendingTransfer = null"
       @confirm="applyTransferAction"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="transferTooltipID && selectedTransfer"
+        ref="transferTooltipRef"
+        class="fixed z-[120] w-80 rounded-xl bg-white p-3 text-left shadow-2xl shadow-slate-950/20 dark:border dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30"
+        :style="transferTooltipStyle"
+        role="dialog"
+        :aria-label="app.t('inventory.transfers.detail')"
+      >
+        <p v-if="transferTooltipLoading" class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">{{ app.t('inventory.transfers.loading') }}</p>
+        <div v-else class="grid gap-3">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-black text-slate-950 dark:text-slate-50">{{ selectedTransfer.transfer_no }}</p>
+              <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{{ selectedTransfer.from_location_name }} -> {{ selectedTransfer.to_location_name }}</p>
+            </div>
+            <AppBadge :tone="transferStatusTone(selectedTransfer.status)">{{ transferStatusLabel(selectedTransfer.status) }}</AppBadge>
+          </div>
+          <div class="grid gap-2">
+            <div v-for="item in selectedTransfer.items" :key="item.id ?? item.product_id" class="rounded-lg bg-slate-50 p-2 dark:bg-slate-950/60">
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex min-w-0 items-center gap-2">
+                  <ProductAvatar :src="productByID(item.product_id)?.image_url" :updated-at="productByID(item.product_id)?.image_updated_at" :name="item.product_name" size="sm" />
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{{ item.product_name }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ item.sku }}</p>
+                  </div>
+                </div>
+                <span class="font-black text-brand-700 dark:text-emerald-200">{{ item.quantity.toLocaleString(locale) }}</span>
+              </div>
+            </div>
+          </div>
+          <p v-if="selectedTransfer.note" class="rounded-lg bg-slate-50 p-2 text-xs text-slate-600 dark:bg-slate-950/60 dark:text-slate-300">{{ selectedTransfer.note }}</p>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

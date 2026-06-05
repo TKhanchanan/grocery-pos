@@ -21,6 +21,7 @@ type DashboardSummary struct {
 	ReorderCount         int                    `json:"reorder_count"`
 	PaymentSummary       []PaymentSummaryReport `json:"payment_method_summary"`
 	RecentSales          []Receipt              `json:"recent_sales"`
+	SalesTrend           []SalesPeriodReport    `json:"sales_trend"`
 	LowStockItems        []StockReport          `json:"low_stock_items"`
 	TopProducts          []ProductSalesReport   `json:"top_products"`
 }
@@ -197,11 +198,38 @@ func (s *Server) buildDashboardSummary(ctx context.Context) (DashboardSummary, e
 	if err != nil {
 		return DashboardSummary{}, err
 	}
+	summary.SalesTrend, err = s.salesTrend(ctx, 31)
+	if err != nil {
+		return DashboardSummary{}, err
+	}
 	summary.LowStockItems, err = s.stockReportForWhere(ctx, []string{"p.threshold > 0", "ps.quantity <= p.threshold"}, nil, 6)
 	if err != nil {
 		return DashboardSummary{}, err
 	}
 	return summary, nil
+}
+
+func (s *Server) salesTrend(ctx context.Context, days int) ([]SalesPeriodReport, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DATE(s.created_at) AS period, COUNT(*), COALESCE(SUM(s.total_amount), 0),
+		       COALESCE(SUM(s.total_cost), 0), COALESCE(SUM(s.profit), 0)
+		FROM sales s
+		WHERE s.status='COMPLETED' AND s.created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+		GROUP BY period
+		ORDER BY period`, days-1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	reports := []SalesPeriodReport{}
+	for rows.Next() {
+		var report SalesPeriodReport
+		if err := rows.Scan(&report.Period, &report.ReceiptCount, &report.Revenue, &report.Cost, &report.Profit); err != nil {
+			return nil, err
+		}
+		reports = append(reports, report)
+	}
+	return reports, rows.Err()
 }
 
 func (s *Server) salesByPeriod(ctx context.Context, r *http.Request, periodExpr string) ([]SalesPeriodReport, error) {

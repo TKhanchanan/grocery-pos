@@ -35,6 +35,7 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 const formOpen = ref(false)
+const saveConfirmOpen = ref(false)
 const targetUser = ref<User | null>(null)
 const confirmOpen = ref(false)
 const form = reactive<UserForm>({
@@ -55,6 +56,8 @@ const canAssignRoles = computed(() => auth.hasPermission('users.assign_roles'))
 const activeCount = computed(() => users.value.filter((user) => user.active).length)
 const inactiveCount = computed(() => users.value.length - activeCount.value)
 const adminCount = computed(() => users.value.filter((user) => user.role === 'ADMIN' || user.roles?.some((role) => role.code === 'ADMIN')).length)
+const saveConfirmTitle = computed(() => editing.value ? app.t('users.confirmUpdateTitle') : app.t('users.confirmCreateTitle'))
+const saveConfirmMessage = computed(() => t('users.confirmSaveMessage', { name: form.fullName.trim() || form.username.trim() || app.t('users.name') }))
 
 function t(key: TranslationKey, params: Record<string, string | number> = {}) {
   let text = String(app.t(key))
@@ -117,9 +120,10 @@ function openEdit(user: User) {
   formOpen.value = true
 }
 
-function closeForm() {
-  if (saving.value) return
+function closeForm(force = false) {
+  if (saving.value && !force) return
   formOpen.value = false
+  saveConfirmOpen.value = false
   resetForm()
 }
 
@@ -137,14 +141,24 @@ function validateForm() {
   return ''
 }
 
-async function saveUser() {
+function requestSaveUser() {
   const validation = validateForm()
   if (validation) {
     error.value = validation
     return
   }
   error.value = ''
+  saveConfirmOpen.value = true
+}
+
+function closeSaveConfirm() {
+  if (saving.value) return
+  saveConfirmOpen.value = false
+}
+
+async function saveUser() {
   saving.value = true
+  const toastMessage = editing.value ? app.t('users.updated') : app.t('users.created')
   const payload = {
     username: form.username.trim(),
     password: form.password,
@@ -157,8 +171,9 @@ async function saveUser() {
     if (editing.value) await patchJSON<User>(`/v1/users/${form.id}`, payload)
     else await postJSON<User>('/v1/users', payload)
     await loadUsers()
-    app.pushToast({ type: 'success', message: editing.value ? app.t('users.updated') : app.t('users.created') })
-    closeForm()
+    saveConfirmOpen.value = false
+    closeForm(true)
+    app.pushToast({ type: 'success', message: toastMessage })
   } catch (err) {
     error.value = friendlyError(err, 'users.saveFailed')
     app.pushToast({ type: 'error', message: app.t('users.saveFailed'), description: error.value })
@@ -229,8 +244,8 @@ onMounted(loadUsers)
                 <th class="px-3 py-3 text-left">{{ app.t('users.username') }}</th>
                 <th class="px-3 py-3 text-left">{{ app.t('users.email') }}</th>
                 <th class="px-3 py-3 text-left">{{ app.t('users.roles') }}</th>
-                <th class="px-3 py-3 text-left">{{ app.t('users.status') }}</th>
-                <th class="px-3 py-3 text-left">{{ app.t('users.actions') }}</th>
+                <th class="px-3 py-3 text-right">{{ app.t('users.status') }}</th>
+                <th class="px-3 py-3 text-right">{{ app.t('users.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -243,10 +258,10 @@ onMounted(loadUsers)
                     <AppBadge v-for="role in user.roles?.length ? user.roles : [{ code: user.role, name: user.role }]" :key="role.code">{{ role.name }}</AppBadge>
                   </div>
                 </td>
-                <td class="px-3 py-3"><AppBadge :tone="user.active ? 'success' : 'neutral'">{{ user.active ? app.t('users.active') : app.t('users.inactive') }}</AppBadge></td>
+                <td class="px-3 py-3 text-right"><AppBadge :tone="user.active ? 'success' : 'neutral'">{{ user.active ? app.t('users.active') : app.t('users.inactive') }}</AppBadge></td>
                 <td class="px-3 py-3">
-                  <div class="flex flex-wrap gap-2">
-                    <AppButton v-if="canUpdate" variant="secondary" icon="settings" @click="openEdit(user)">{{ app.t('users.edit') }}</AppButton>
+                  <div class="flex flex-wrap justify-end gap-2">
+                    <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('users.edit')" :aria-label="app.t('users.edit')" @click="openEdit(user)" />
                     <AppButton v-if="canDeactivate" :variant="user.active ? 'danger' : 'secondary'" @click="askStatus(user)">
                       {{ user.active ? app.t('users.deactivate') : app.t('users.activate') }}
                     </AppButton>
@@ -270,7 +285,7 @@ onMounted(loadUsers)
               <AppBadge v-for="role in user.roles?.length ? user.roles : [{ code: user.role, name: user.role }]" :key="role.code">{{ role.name }}</AppBadge>
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
-              <AppButton v-if="canUpdate" variant="secondary" icon="settings" @click="openEdit(user)">{{ app.t('users.edit') }}</AppButton>
+              <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('users.edit')" :aria-label="app.t('users.edit')" @click="openEdit(user)" />
               <AppButton v-if="canDeactivate" :variant="user.active ? 'danger' : 'secondary'" @click="askStatus(user)">
                 {{ user.active ? app.t('users.deactivate') : app.t('users.activate') }}
               </AppButton>
@@ -281,16 +296,20 @@ onMounted(loadUsers)
     </AppCard>
 
     <AppModal :open="formOpen" :title="editing ? app.t('users.editTitle') : app.t('users.createTitle')" :description="app.t('users.modalDescription')" :close-label="app.t('users.cancel')" size="lg" @close="closeForm">
-      <form class="grid gap-4" @submit.prevent="saveUser">
-        <div class="grid gap-3 md:grid-cols-2">
-          <AppInput v-model="form.fullName" :label="app.t('users.name')" />
-          <AppInput v-model="form.username" :label="app.t('users.username')" />
-          <AppInput v-model="form.password" :label="app.t('users.password')" type="password" :placeholder="editing ? app.t('users.passwordOptional') : ''" />
+      <form class="grid gap-4" @submit.prevent="requestSaveUser">
+        <div class="grid gap-4">
+          <div class="grid gap-3 md:grid-cols-2">
+            <AppInput v-model="form.fullName" :label="app.t('users.name')" :placeholder="app.t('users.namePlaceholder')" />
+            <AppInput v-model="form.username" :label="app.t('users.username')" :placeholder="app.t('users.usernamePlaceholder')" />
+          </div>
+          <div class="grid gap-3 md:grid-cols-2">
+          <AppInput v-model="form.password" :label="app.t('users.password')" type="password" :placeholder="editing ? app.t('users.passwordOptional') : app.t('users.passwordPlaceholder')" />
           <AppSelect v-model="form.role" :label="app.t('users.legacyRole')">
             <option value="ADMIN">ADMIN</option>
             <option value="MANAGER">MANAGER</option>
             <option value="CASHIER">CASHIER</option>
           </AppSelect>
+          </div>
         </div>
 
         <section class="grid gap-2 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/45">
@@ -328,6 +347,17 @@ onMounted(loadUsers)
         </div>
       </form>
     </AppModal>
+
+    <ConfirmDialog
+      :open="saveConfirmOpen"
+      :title="saveConfirmTitle"
+      :message="saveConfirmMessage"
+      :confirm-label="editing ? app.t('users.save') : app.t('users.create')"
+      :cancel-label="app.t('users.cancel')"
+      :loading="saving"
+      @close="closeSaveConfirm"
+      @confirm="saveUser"
+    />
 
     <ConfirmDialog
       :open="confirmOpen"

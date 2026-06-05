@@ -284,6 +284,7 @@ export interface DashboardSummary {
   reorder_count: number
   payment_method_summary: PaymentSummaryReport[]
   recent_sales: Receipt[]
+  sales_trend: SalesPeriodReport[]
   low_stock_items: StockReport[]
   top_products: ProductSalesReport[]
 }

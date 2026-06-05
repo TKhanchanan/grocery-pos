@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { apiClient } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
 import AppButton from '../components/AppButton.vue'
@@ -42,6 +43,8 @@ interface KpiCard {
 
 const app = useAppStore()
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const tabs: ReportTab[] = [
   { key: 'daily-sales', labelKey: 'reports.tab.dailySales', endpoint: '/v1/reports/daily-sales', icon: 'receipt-text' },
@@ -55,6 +58,7 @@ const tabs: ReportTab[] = [
   { key: 'reorder', labelKey: 'reports.tab.reorder', endpoint: '/v1/reports/reorder', icon: 'clipboard-list' },
 ]
 
+const reportTabKeys = tabs.map((tab) => tab.key)
 const activeTab = ref<ReportKey>('daily-sales')
 const rows = ref<ReportRow[]>([])
 const locations = ref<Location[]>([])
@@ -248,6 +252,26 @@ function buildQuery() {
   return params.toString()
 }
 
+function routeTab(value: unknown): ReportKey {
+  return typeof value === 'string' && reportTabKeys.includes(value as ReportKey) ? value as ReportKey : 'daily-sales'
+}
+
+function resetReportFilters() {
+  filters.date_from = ''
+  filters.date_to = ''
+  filters.month = ''
+  filters.location_id = ''
+  page.value = 1
+}
+
+function syncTabFromRoute() {
+  const nextTab = routeTab(route.query.tab)
+  if (activeTab.value === nextTab) return
+  activeTab.value = nextTab
+  resetReportFilters()
+  loadReport()
+}
+
 async function loadReport() {
   loading.value = true
   error.value = ''
@@ -398,12 +422,10 @@ async function loadLocations() {
 }
 
 function setTab(key: ReportKey) {
+  if (activeTab.value === key) return
   activeTab.value = key
-  filters.date_from = ''
-  filters.date_to = ''
-  filters.month = ''
-  filters.location_id = ''
-  page.value = 1
+  resetReportFilters()
+  router.replace({ path: '/reports', query: { ...route.query, tab: key } })
   loadReport()
 }
 
@@ -428,7 +450,10 @@ function nextPage() {
   if (page.value < totalPages.value) page.value += 1
 }
 
+watch(() => route.query.tab, syncTabFromRoute)
+
 onMounted(async () => {
+  activeTab.value = routeTab(route.query.tab)
   await loadLocations()
   await loadReport()
 })

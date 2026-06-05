@@ -94,11 +94,33 @@ function periodDays() {
 }
 
 function dateKey(date: Date) {
-  return date.toISOString().slice(0, 10)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function normalizeDateKey(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`
+  return dateKey(new Date(value))
 }
 
 function shortDate(key: string) {
-  return new Intl.DateTimeFormat(thaiLocale(), { day: '2-digit', month: 'short' }).format(new Date(`${key}T00:00:00`))
+  const [year, month, day] = key.split('-').map(Number)
+  return new Intl.DateTimeFormat(thaiLocale(), { day: '2-digit', month: 'short' }).format(new Date(year, month - 1, day))
+}
+
+function trendStartDate(today: Date) {
+  if (period.value === 'MONTH') return new Date(today.getFullYear(), today.getMonth(), 1)
+  const date = new Date(today)
+  date.setDate(today.getDate() - (periodDays() - 1))
+  return date
+}
+
+function trendEndDate(today: Date) {
+  if (period.value === 'MONTH') return new Date(today.getFullYear(), today.getMonth() + 1, 0)
+  return today
 }
 
 function stockStatusLabel(status: StockStatus) {
@@ -116,21 +138,20 @@ function paymentMethodLabel(method: string) {
 }
 
 const salesTrend = computed(() => {
-  const days = periodDays()
   const today = new Date()
   const rows = new Map<string, { revenue: number; profit: number; receipts: number }>()
-  for (let index = days - 1; index >= 0; index--) {
-    const date = new Date(today)
-    date.setDate(today.getDate() - index)
+  const start = trendStartDate(today)
+  const end = trendEndDate(today)
+  for (const date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
     rows.set(dateKey(date), { revenue: 0, profit: 0, receipts: 0 })
   }
-  for (const sale of summary.value?.recent_sales ?? []) {
-    const key = dateKey(new Date(sale.created_at))
+  for (const report of summary.value?.sales_trend ?? []) {
+    const key = normalizeDateKey(report.period)
     const row = rows.get(key)
-    if (!row || sale.status === 'CANCELLED') continue
-    row.revenue += sale.total_amount
-    row.profit += sale.profit
-    row.receipts += 1
+    if (!row) continue
+    row.revenue += report.revenue
+    row.profit += report.profit
+    row.receipts += report.receipt_count
   }
   return {
     labels: [...rows.keys()].map(shortDate),
@@ -139,8 +160,6 @@ const salesTrend = computed(() => {
     receipts: [...rows.values()].map((row) => row.receipts),
   }
 })
-
-const hasSalesTrend = computed(() => salesTrend.value.revenue.some((value) => value > 0) || salesTrend.value.profit.some((value) => value > 0))
 
 const salesChartOptions = computed<ApexOptions>(() => ({
   chart: {
@@ -324,9 +343,6 @@ onBeforeUnmount(() => {
           </div>
           <div class="mt-5 min-h-[320px]">
             <VueApexCharts height="320" type="area" :options="salesChartOptions" :series="salesSeries" />
-          </div>
-          <div v-if="!hasSalesTrend" class="mt-2">
-            <AppEmptyState :title="app.t('dashboard.empty.noTrendTitle')" :description="app.t('dashboard.empty.noTrendDescription')" />
           </div>
         </AppCard>
 

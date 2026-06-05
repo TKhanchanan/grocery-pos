@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { apiClient, patchJSON, postJSON } from '../api/client'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
@@ -9,6 +10,7 @@ import AppLoadingState from '../components/AppLoadingState.vue'
 import AppSelect from '../components/AppSelect.vue'
 import AppTabs from '../components/AppTabs.vue'
 import AppTextarea from '../components/AppTextarea.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
@@ -18,14 +20,18 @@ import { formatThaiDateTime } from '../utils/date'
 type SettingsTab = 'shop' | 'receipt' | 'line' | 'accessibility' | 'system'
 
 const app = useAppStore()
+const route = useRoute()
+const router = useRouter()
 const locations = ref<Location[]>([])
 const logs = ref<NotificationLog[]>([])
 const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
-const message = ref('')
 const error = ref('')
+const settingTabKeys: SettingsTab[] = ['shop', 'receipt', 'line', 'accessibility', 'system']
 const activeTab = ref<SettingsTab>('shop')
+const saveConfirmOpen = ref(false)
+const pendingSave = ref<'shop' | 'receipt' | 'line' | 'system' | ''>('')
 
 const tabs = computed(() => [
   { key: 'shop' as const, label: app.t('settings.tab.shop') },
@@ -51,6 +57,24 @@ const lineForm = reactive({
   line_target_id: '',
 })
 
+const saveConfirmTitle = computed(() => pendingSave.value === 'line' ? app.t('settings.confirmLineTitle') : app.t('settings.confirmSettingsTitle'))
+const saveConfirmMessage = computed(() => {
+  const labels: Record<'shop' | 'receipt' | 'line' | 'system', TranslationKey> = {
+    shop: 'settings.tab.shop',
+    receipt: 'settings.tab.receipt',
+    line: 'settings.tab.line',
+    system: 'settings.tab.system',
+  }
+  const key = pendingSave.value ? labels[pendingSave.value] : 'settings.title'
+  return t('settings.confirmSaveMessage', { section: app.t(key) })
+})
+
+function t(key: TranslationKey, params: Record<string, string | number> = {}) {
+  let text = String(app.t(key))
+  for (const [name, value] of Object.entries(params)) text = text.replaceAll(`{${name}}`, String(value))
+  return text
+}
+
 function statusClass(status: NotificationLog['status']) {
   return {
     SENT: 'bg-brand-100 text-brand-700',
@@ -62,6 +86,19 @@ function statusClass(status: NotificationLog['status']) {
 
 function fallbackError(err: unknown, fallback: TranslationKey) {
   return err instanceof Error ? err.message : app.t(fallback)
+}
+
+function routeTab(value: unknown): SettingsTab {
+  return typeof value === 'string' && settingTabKeys.includes(value as SettingsTab) ? value as SettingsTab : 'shop'
+}
+
+function syncTabFromRoute() {
+  activeTab.value = routeTab(route.query.tab)
+}
+
+function setActiveTab(tab: SettingsTab) {
+  activeTab.value = tab
+  router.replace({ path: '/settings', query: { ...route.query, tab } })
 }
 
 function applySettings(settings: AppSettings) {
@@ -101,9 +138,29 @@ async function load() {
   }
 }
 
+function requestSaveSettings(section: 'shop' | 'receipt' | 'system') {
+  pendingSave.value = section
+  saveConfirmOpen.value = true
+}
+
+function requestSaveLineSettings() {
+  pendingSave.value = 'line'
+  saveConfirmOpen.value = true
+}
+
+function closeSaveConfirm() {
+  if (saving.value) return
+  saveConfirmOpen.value = false
+  pendingSave.value = ''
+}
+
+async function confirmSaveSettings() {
+  if (pendingSave.value === 'line') await saveLineSettings()
+  else await saveShopSettings()
+}
+
 async function saveShopSettings() {
   saving.value = true
-  message.value = ''
   error.value = ''
   try {
     const settings = await patchJSON<AppSettings>('/v1/settings', {
@@ -114,7 +171,8 @@ async function saveShopSettings() {
       receipt_footer: shopForm.receipt_footer,
     })
     applySettings(settings)
-    message.value = app.t('settings.saved')
+    saveConfirmOpen.value = false
+    pendingSave.value = ''
     app.pushToast({ type: 'success', message: app.t('settings.saved') })
   } catch (err) {
     error.value = fallbackError(err, 'settings.saveFailed')
@@ -126,7 +184,6 @@ async function saveShopSettings() {
 
 async function saveLineSettings() {
   saving.value = true
-  message.value = ''
   error.value = ''
   try {
     const lineSettings = await patchJSON<LineSettings>('/v1/settings/line', {
@@ -135,7 +192,8 @@ async function saveLineSettings() {
       line_target_id: lineForm.line_target_id,
     })
     applyLineSettings(lineSettings)
-    message.value = app.t('settings.lineSaved')
+    saveConfirmOpen.value = false
+    pendingSave.value = ''
     app.pushToast({ type: 'success', message: app.t('settings.lineSaved') })
   } catch (err) {
     error.value = fallbackError(err, 'settings.lineSaveFailed')
@@ -147,11 +205,9 @@ async function saveLineSettings() {
 
 async function testLine() {
   testing.value = true
-  message.value = ''
   error.value = ''
   try {
     await postJSON<NotificationLog>('/v1/settings/line/test', {})
-    message.value = app.t('settings.testSent')
     app.pushToast({ type: 'success', message: app.t('settings.testSent') })
     logs.value = await apiClient<NotificationLog[]>('/v1/notification-logs')
   } catch (err) {
@@ -163,7 +219,12 @@ async function testLine() {
   }
 }
 
-onMounted(load)
+watch(() => route.query.tab, syncTabFromRoute)
+
+onMounted(() => {
+  syncTabFromRoute()
+  load()
+})
 </script>
 
 <template>
@@ -171,21 +232,22 @@ onMounted(load)
     <PageHeader :title="app.t('settings.title')" :description="app.t('settings.description')" icon="settings" />
 
     <div v-if="error" class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ error }}</div>
-    <div v-if="message" class="mb-4 rounded-md border border-brand-100 bg-brand-50 p-3 text-sm text-brand-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-100">{{ message }}</div>
     <AppLoadingState v-if="loading" class="mb-4" :label="app.t('settings.loading')" />
 
     <div class="grid gap-4">
-      <AppTabs :tabs="tabs" v-model="activeTab" />
+      <AppTabs :tabs="tabs" :model-value="activeTab" @update:model-value="setActiveTab" />
 
       <AppCard v-if="activeTab === 'shop'" hover class="dark:bg-slate-900/80">
-        <form class="grid gap-4" @submit.prevent="saveShopSettings">
+        <form class="grid gap-4" @submit.prevent="requestSaveSettings('shop')">
           <div>
             <h2 class="font-bold">{{ app.t('settings.shopProfile') }}</h2>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ app.t('settings.shopProfileDescription') }}</p>
           </div>
-          <AppInput v-model="shopForm.shop_name" :label="app.t('settings.shopName')" />
-          <AppInput v-model="shopForm.shop_phone" :label="app.t('settings.shopPhone')" />
-          <AppTextarea v-model="shopForm.shop_address" :label="app.t('settings.shopAddress')" />
+          <div class="grid gap-3 md:grid-cols-2">
+            <AppInput v-model="shopForm.shop_name" :label="app.t('settings.shopName')" :placeholder="app.t('settings.shopNamePlaceholder')" />
+            <AppInput v-model="shopForm.shop_phone" :label="app.t('settings.shopPhone')" :placeholder="app.t('settings.shopPhonePlaceholder')" />
+          </div>
+          <AppTextarea v-model="shopForm.shop_address" :label="app.t('settings.shopAddress')" :placeholder="app.t('settings.shopAddressPlaceholder')" />
           <div class="flex justify-end">
             <AppButton type="submit" :loading="saving" :disabled="saving" icon="check-circle">{{ app.t('settings.saveSettings') }}</AppButton>
           </div>
@@ -193,12 +255,12 @@ onMounted(load)
       </AppCard>
 
       <AppCard v-if="activeTab === 'receipt'" hover class="dark:bg-slate-900/80">
-        <form class="grid gap-4" @submit.prevent="saveShopSettings">
+        <form class="grid gap-4" @submit.prevent="requestSaveSettings('receipt')">
           <div>
             <h2 class="font-bold">{{ app.t('settings.receipt') }}</h2>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ app.t('settings.receiptDescription') }}</p>
           </div>
-          <AppTextarea v-model="shopForm.receipt_footer" :label="app.t('settings.receiptFooter')" />
+          <AppTextarea v-model="shopForm.receipt_footer" :label="app.t('settings.receiptFooter')" :placeholder="app.t('settings.receiptFooterPlaceholder')" />
           <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm dark:border-slate-700 dark:bg-slate-950/45">
             <p class="font-bold">{{ app.t('settings.preview') }}</p>
             <p class="mt-2 whitespace-pre-line text-slate-600 dark:text-slate-300">{{ shopForm.receipt_footer || app.t('settings.receiptFooter') }}</p>
@@ -210,7 +272,7 @@ onMounted(load)
       </AppCard>
 
       <AppCard v-if="activeTab === 'line'" hover class="dark:bg-slate-900/80">
-        <form class="grid gap-4" @submit.prevent="saveLineSettings">
+        <form class="grid gap-4" @submit.prevent="requestSaveLineSettings">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 class="font-bold">{{ app.t('settings.line') }}</h2>
@@ -221,8 +283,10 @@ onMounted(load)
             </span>
           </div>
           <AppCheckbox v-model="lineForm.line_enabled" :label="app.t('settings.lineEnabled')" :description="app.t('settings.lineTokenHelp')" />
-          <AppInput v-model="lineForm.line_target_id" :label="app.t('settings.lineTarget')" />
-          <AppInput v-model="lineForm.line_token" :label="app.t('settings.lineToken')" :placeholder="lineForm.line_token_masked || app.t('settings.lineTokenPlaceholder')" type="password" />
+          <div class="grid gap-3 md:grid-cols-2">
+            <AppInput v-model="lineForm.line_target_id" :label="app.t('settings.lineTarget')" :placeholder="app.t('settings.lineTargetPlaceholder')" />
+            <AppInput v-model="lineForm.line_token" :label="app.t('settings.lineToken')" :placeholder="lineForm.line_token_masked || app.t('settings.lineTokenPlaceholder')" type="password" />
+          </div>
           <p class="text-xs text-slate-500 dark:text-slate-400">{{ app.t('settings.lineTokenHelp') }}</p>
           <div class="flex flex-wrap gap-2">
             <AppButton type="submit" :loading="saving" :disabled="saving" icon="check-circle">{{ app.t('settings.saveLine') }}</AppButton>
@@ -273,7 +337,7 @@ onMounted(load)
               <AppButton :variant="app.language === 'en' ? 'primary' : 'secondary'" @click="app.setLanguage('en')">{{ app.t('settings.english') }}</AppButton>
             </div>
           </div>
-          <form class="grid gap-4" @submit.prevent="saveShopSettings">
+          <form class="grid gap-4" @submit.prevent="requestSaveSettings('system')">
             <AppSelect v-model="shopForm.default_location_id" :label="app.t('settings.defaultLocation')">
               <option value="">-</option>
               <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
@@ -329,5 +393,16 @@ onMounted(load)
         </div>
       </AppCard>
     </div>
+
+    <ConfirmDialog
+      :open="saveConfirmOpen"
+      :title="saveConfirmTitle"
+      :message="saveConfirmMessage"
+      :confirm-label="pendingSave === 'line' ? app.t('settings.saveLine') : app.t('settings.saveSettings')"
+      :cancel-label="app.t('settings.cancel')"
+      :loading="saving"
+      @close="closeSaveConfirm"
+      @confirm="confirmSaveSettings"
+    />
   </section>
 </template>

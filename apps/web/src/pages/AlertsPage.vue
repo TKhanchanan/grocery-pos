@@ -166,7 +166,7 @@ onMounted(async () => {
   <section>
     <PageHeader :title="app.t('alerts.title')" :eyebrow="app.t('alerts.eyebrow')" :description="app.t('alerts.description')" icon="bell">
       <div class="flex flex-wrap gap-2">
-        <AppButton variant="secondary" icon="history" :loading="loading" @click="loadAlerts">{{ app.t('alerts.tryAgain') }}</AppButton>
+        <!-- <AppButton variant="secondary" icon="history" :loading="loading" @click="loadAlerts">{{ app.t('alerts.tryAgain') }}</AppButton> -->
         <AppButton v-if="canMarkRead" :disabled="unreadCount === 0" icon="check-circle" @click="markAllRead">{{ app.t('alerts.markAllRead') }}</AppButton>
       </div>
     </PageHeader>
@@ -179,7 +179,7 @@ onMounted(async () => {
       <StatCard :label="alertTypeLabel('REORDER_POINT')" :value="reorderCount" :helper="app.t('alerts.reorderHelper')" icon="clipboard-list" tone="info" />
     </div>
 
-    <AppCard class="mb-4">
+    <AppCard class="mb-4 dark:bg-slate-900/80">
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-end">
         <div>
           <p class="text-sm font-black text-slate-700 dark:text-slate-200">{{ app.t('alerts.status') }}</p>
@@ -206,7 +206,7 @@ onMounted(async () => {
     <div v-if="error" class="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <span>{{ error }}</span>
-        <AppButton variant="secondary" @click="loadAlerts">{{ app.t('alerts.tryAgain') }}</AppButton>
+        <!-- <AppButton variant="secondary" @click="loadAlerts">{{ app.t('alerts.tryAgain') }}</AppButton> -->
       </div>
     </div>
     <AppLoadingState v-if="loading" class="mb-4" :label="app.t('alerts.loading')" />

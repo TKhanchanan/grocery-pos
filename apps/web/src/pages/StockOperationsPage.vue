@@ -13,6 +13,7 @@ import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import AppSelect from '../components/AppSelect.vue'
 import AppTabs from '../components/AppTabs.vue'
 import AppTextarea from '../components/AppTextarea.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import ProductAvatar from '../components/ProductAvatar.vue'
 import type { TranslationKey } from '../i18n'
@@ -53,6 +54,8 @@ const adjustSubmitting = ref(false)
 const error = ref('')
 const movementError = ref('')
 const adjustOpen = ref(false)
+const restockConfirmOpen = ref(false)
+const adjustConfirmOpen = ref(false)
 const activeTab = ref<StockTab>('restock')
 const page = ref(1)
 const pageSize = ref(20)
@@ -128,6 +131,22 @@ function movementTone(type: string) {
   return 'info'
 }
 
+function movementLabel(type: string) {
+  const keys: Record<string, TranslationKey> = {
+    RESTOCK: 'stockOps.movement.RESTOCK',
+    ADJUSTMENT: 'stockOps.movement.ADJUSTMENT',
+    SALE: 'stockOps.movement.SALE',
+    CANCEL_SALE: 'stockOps.movement.CANCEL_SALE',
+    PO_RECEIVE: 'stockOps.movement.PO_RECEIVE',
+    TRANSFER_IN: 'stockOps.movement.TRANSFER_IN',
+    TRANSFER_OUT: 'stockOps.movement.TRANSFER_OUT',
+    IMPORT: 'stockOps.movement.IMPORT',
+    SEED: 'stockOps.movement.SEED',
+  }
+  const key = keys[type]
+  return key ? app.t(key) : type
+}
+
 function friendlyError(err: unknown, fallback: TranslationKey) {
   const message = err instanceof Error ? err.message : app.t(fallback)
   if (message.toLowerCase().includes('permission')) return app.t('stockOps.noPermission')
@@ -190,12 +209,22 @@ function validateRestock() {
   return ''
 }
 
-async function restock() {
+function requestRestock() {
   const validation = validateRestock()
   if (validation) {
     error.value = validation
     return
   }
+  error.value = ''
+  restockConfirmOpen.value = true
+}
+
+function closeRestockConfirm() {
+  if (submitting.value) return
+  restockConfirmOpen.value = false
+}
+
+async function restock() {
   submitting.value = true
   error.value = ''
   latestMovement.value = null
@@ -207,6 +236,7 @@ async function restock() {
       unit_cost: Number(unitCostPreview.value),
       note: form.note,
     })
+    restockConfirmOpen.value = false
     app.pushToast({ type: 'success', message: app.t('stockOps.restockSuccess'), description: selectedProduct.value?.name })
     await loadData()
     if (canViewMovements.value) {
@@ -224,10 +254,17 @@ async function restock() {
 function openAdjust() {
   adjustment.quantity = -1
   adjustment.note = ''
+  error.value = ''
   adjustOpen.value = true
 }
 
-async function adjustStock() {
+function closeAdjust(force = false) {
+  if (adjustSubmitting.value && !force) return
+  adjustOpen.value = false
+  adjustConfirmOpen.value = false
+}
+
+function requestAdjustStock() {
   if (Number(adjustment.quantity) === 0) {
     error.value = app.t('stockOps.adjustQuantityRequired')
     return
@@ -236,6 +273,16 @@ async function adjustStock() {
     error.value = app.t('stockOps.noteRequired')
     return
   }
+  error.value = ''
+  adjustConfirmOpen.value = true
+}
+
+function closeAdjustConfirm() {
+  if (adjustSubmitting.value) return
+  adjustConfirmOpen.value = false
+}
+
+async function adjustStock() {
   adjustSubmitting.value = true
   error.value = ''
   try {
@@ -244,8 +291,9 @@ async function adjustStock() {
       quantity: Number(adjustment.quantity),
       note: adjustment.note.trim(),
     })
+    adjustConfirmOpen.value = false
     app.pushToast({ type: 'success', message: app.t('stockOps.adjustSuccess'), description: selectedProduct.value?.name })
-    adjustOpen.value = false
+    closeAdjust(true)
     await loadData()
     if (canViewMovements.value) {
       page.value = 1
@@ -296,18 +344,22 @@ onMounted(async () => {
       <div v-if="activeTab === 'restock' && canUseRestockTab" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <AppCard class="dark:bg-slate-900/80">
           <AppLoadingState v-if="loadingData" :label="app.t('stockOps.loadingData')" />
-          <form v-else class="grid gap-4" @submit.prevent="restock">
-            <div class="grid gap-3 md:grid-cols-2">
+          <form v-else class="grid gap-4" @submit.prevent="requestRestock">
+            <div class="grid gap-4">
+              <div class="grid gap-3 lg:grid-cols-2">
               <AppSelect v-model="form.product_id" :label="app.t('stockOps.product')">
                 <option v-for="product in products" :key="product.id" :value="String(product.id)">{{ product.name }} · {{ product.sku }}</option>
               </AppSelect>
               <AppSelect v-model="form.location_id" :label="app.t('stockOps.location')">
                 <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
               </AppSelect>
-              <AppInput v-model="form.quantity" :label="app.t('stockOps.quantity')" type="number" />
-              <AppInput v-model="form.total_cost" :label="app.t('stockOps.totalCost')" type="number" />
-              <AppInput v-model="form.unit_cost" :label="app.t('stockOps.unitCostFallback')" type="number" />
-              <AppTextarea v-model="form.note" :label="app.t('stockOps.note')" />
+              </div>
+              <div class="grid gap-3 lg:grid-cols-3">
+                <AppInput v-model="form.quantity" :label="app.t('stockOps.quantity')" type="number" min="1" step="1" :placeholder="app.t('stockOps.quantityPlaceholder')" />
+                <AppInput v-model="form.total_cost" :label="app.t('stockOps.totalCost')" type="number" min="0" step="0.01" :placeholder="app.t('stockOps.totalCostPlaceholder')" />
+                <AppInput v-model="form.unit_cost" :label="app.t('stockOps.unitCostFallback')" type="number" min="0" step="0.01" :placeholder="app.t('stockOps.unitCostPlaceholder')" />
+              </div>
+              <AppTextarea v-model="form.note" :label="app.t('stockOps.note')" :placeholder="app.t('stockOps.notePlaceholder')" />
             </div>
 
             <div class="grid gap-3 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/50 md:hidden">
@@ -347,7 +399,7 @@ onMounted(async () => {
           <AppCard v-if="latestMovement" class="dark:bg-slate-900/80">
             <h2 class="font-black">{{ app.t('stockOps.latestMovement') }}</h2>
             <dl class="mt-3 grid grid-cols-3 gap-3 text-sm">
-              <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.type') }}</dt><dd class="font-black">{{ latestMovement.reference_type }}</dd></div>
+              <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.type') }}</dt><dd class="font-black">{{ movementLabel(latestMovement.reference_type) }}</dd></div>
               <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.before') }}</dt><dd class="font-black">{{ latestMovement.before_stock }}</dd></div>
               <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.after') }}</dt><dd class="font-black">{{ latestMovement.after_stock }}</dd></div>
             </dl>
@@ -387,7 +439,7 @@ onMounted(async () => {
                     </div>
                   </td>
                   <td class="px-3 py-3">{{ movement.location_name }}</td>
-                  <td class="px-3 py-3"><AppBadge :tone="movementTone(movement.reference_type)">{{ movement.reference_type }}</AppBadge></td>
+                  <td class="px-3 py-3"><AppBadge :tone="movementTone(movement.reference_type)">{{ movementLabel(movement.reference_type) }}</AppBadge></td>
                   <td class="px-3 py-3 text-right font-black" :class="movement.quantity_change < 0 ? 'text-red-600 dark:text-red-300' : 'text-brand-700 dark:text-emerald-200'">{{ signed(movement.quantity_change) }}</td>
                   <td class="px-3 py-3 text-right">{{ movement.before_stock }}</td>
                   <td class="px-3 py-3 text-right">{{ movement.after_stock }}</td>
@@ -409,7 +461,7 @@ onMounted(async () => {
                 </div>
                 <span class="font-black" :class="movement.quantity_change < 0 ? 'text-red-600 dark:text-red-300' : 'text-brand-700 dark:text-emerald-200'">{{ signed(movement.quantity_change) }}</span>
               </div>
-              <div class="mt-3 flex flex-wrap gap-2"><AppBadge :tone="movementTone(movement.reference_type)">{{ movement.reference_type }}</AppBadge><span class="text-xs text-slate-500 dark:text-slate-400">{{ formatThaiDateTime(movement.created_at) }}</span></div>
+              <div class="mt-3 flex flex-wrap gap-2"><AppBadge :tone="movementTone(movement.reference_type)">{{ movementLabel(movement.reference_type) }}</AppBadge><span class="text-xs text-slate-500 dark:text-slate-400">{{ formatThaiDateTime(movement.created_at) }}</span></div>
               <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
                 <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.before') }}</dt><dd class="font-semibold">{{ movement.before_stock }}</dd></div>
                 <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.after') }}</dt><dd class="font-semibold">{{ movement.after_stock }}</dd></div>
@@ -435,19 +487,41 @@ onMounted(async () => {
       </AppCard>
     </div>
 
-    <AppModal :open="adjustOpen" :title="app.t('stockOps.adjustTitle')" :description="app.t('stockOps.adjustDescription')" @close="adjustOpen = false">
-      <form class="grid gap-3" @submit.prevent="adjustStock">
+    <AppModal :open="adjustOpen" :title="app.t('stockOps.adjustTitle')" :description="app.t('stockOps.adjustDescription')" @close="closeAdjust">
+      <form class="grid gap-3" @submit.prevent="requestAdjustStock">
         <div class="rounded-2xl bg-slate-50 p-4 text-sm dark:bg-slate-950/60">
           <p><b>{{ app.t('stockOps.currentStock') }}:</b> {{ stockLine(currentStock) }}</p>
           <p><b>{{ app.t('stockOps.afterAdjustment') }}:</b> {{ stockLine(afterAdjustmentPreview) }}</p>
         </div>
-        <AppInput v-model="adjustment.quantity" :label="app.t('stockOps.quantity')" type="number" />
-        <AppTextarea v-model="adjustment.note" :label="app.t('stockOps.note')" />
+        <AppInput v-model="adjustment.quantity" :label="app.t('stockOps.quantity')" type="number" :placeholder="app.t('stockOps.adjustQuantityPlaceholder')" />
+        <AppTextarea v-model="adjustment.note" :label="app.t('stockOps.note')" :placeholder="app.t('stockOps.adjustNotePlaceholder')" />
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <AppButton type="button" variant="secondary" :disabled="adjustSubmitting" @click="adjustOpen = false">{{ app.t('stockOps.cancel') }}</AppButton>
+          <AppButton type="button" variant="secondary" :disabled="adjustSubmitting" @click="closeAdjust">{{ app.t('stockOps.cancel') }}</AppButton>
           <AppButton type="submit" :loading="adjustSubmitting" :disabled="adjustSubmitting">{{ app.t('stockOps.submitAdjustment') }}</AppButton>
         </div>
       </form>
     </AppModal>
+
+    <ConfirmDialog
+      :open="restockConfirmOpen"
+      :title="app.t('stockOps.confirmRestockTitle')"
+      :message="t('stockOps.confirmRestockMessage', { product: selectedProduct?.name ?? app.t('stockOps.product'), quantity: Number(form.quantity || 0).toLocaleString(locale) })"
+      :confirm-label="app.t('stockOps.submitRestock')"
+      :cancel-label="app.t('stockOps.cancel')"
+      :loading="submitting"
+      @close="closeRestockConfirm"
+      @confirm="restock"
+    />
+
+    <ConfirmDialog
+      :open="adjustConfirmOpen"
+      :title="app.t('stockOps.confirmAdjustTitle')"
+      :message="t('stockOps.confirmAdjustMessage', { product: selectedProduct?.name ?? app.t('stockOps.product'), quantity: signed(Number(adjustment.quantity || 0)) })"
+      :confirm-label="app.t('stockOps.submitAdjustment')"
+      :cancel-label="app.t('stockOps.cancel')"
+      :loading="adjustSubmitting"
+      @close="closeAdjustConfirm"
+      @confirm="adjustStock"
+    />
   </section>
 </template>
