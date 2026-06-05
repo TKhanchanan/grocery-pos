@@ -244,8 +244,7 @@ watch(() => route.path, () => {
 
     <AppDrawer :open="app.sidebarOpen" @close="app.closeSidebar">
       <div class="mb-4 flex items-center gap-3 rounded-xl bg-brand-50 p-3 shadow-sm dark:bg-slate-900">
-          <AppIcon name="shopping-cart" />
-        </div>
+        <img class="h-11 w-11 shrink-0 rounded-xl object-contain shadow-lg shadow-brand-600/20" :src="logoUrl" :alt="app.t('app.name')" />
         <div class="min-w-0">
           <p class="truncate text-xs font-semibold uppercase text-brand-700">{{ app.t('app.name') }}</p>
           <h1 class="truncate text-base font-black">{{ app.t('app.subtitle') }}</h1>
