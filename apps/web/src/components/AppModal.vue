@@ -29,7 +29,7 @@ const sizeClass = computed(() => ({
           <AppIcon name="x" :size="18" />
         </button>
         <section class="premium-surface max-h-[92vh] w-full overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-900 sm:p-6">
-        <div class="flex items-start gap-3 pr-10" :class="centered ? 'justify-center text-center' : 'justify-between'">
+        <div class="flex items-start" :class="centered ? 'justify-center text-center' : 'justify-between'">
           <div :class="centered ? 'mx-auto' : ''">
             <h2 class="text-lg font-bold">{{ title }}</h2>
             <p v-if="description" class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ description }}</p>

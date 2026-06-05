@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
 
     <AppModal :open="profileOpen" title="ดูโปรไฟล์" @close="profileOpen = false">
       <div class="grid gap-5">
-        <div class="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-5 text-center dark:border-slate-700 dark:bg-slate-950/60">
+        <div class="flex flex-col items-center gap-3 rounded-2xl bg-slate-50/80 p-5 text-center dark:border-slate-700 dark:bg-slate-950/60">
           <AppAvatar :src="auth.user?.avatar_url" :name="displayName" size="xl" />
           <div>
             <h2 class="text-xl font-black">{{ displayName }}</h2>
@@ -159,21 +159,21 @@ onBeforeUnmount(() => {
         </div>
 
         <dl class="grid gap-3 text-sm sm:grid-cols-2">
-          <div class="rounded-xl bg-white/70 p-3 dark:bg-slate-950/60">
+          <div class="rounded-xl bg-slate-50/80 p-3 dark:bg-slate-950/60">
             <dt class="text-slate-500 dark:text-slate-400">Account status</dt>
             <dd class="font-bold">{{ auth.user?.active ? 'Active' : 'Disabled' }}</dd>
           </div>
-          <div class="rounded-xl bg-white/70 p-3 dark:bg-slate-950/60">
+          <div class="rounded-xl bg-slate-50/80 p-3 dark:bg-slate-950/60">
             <dt class="text-slate-500 dark:text-slate-400">Permissions</dt>
             <dd class="font-bold">{{ permissionsSummary }}</dd>
           </div>
-          <div class="rounded-xl bg-white/70 p-3 dark:bg-slate-950/60 sm:col-span-2">
+          <div class="rounded-xl bg-slate-50/80 p-3 dark:bg-slate-950/60 sm:col-span-2">
             <dt class="text-slate-500 dark:text-slate-400">Avatar updated</dt>
             <dd class="font-bold">{{ formatThaiDateTime(auth.user?.avatar_updated_at) }}</dd>
           </div>
         </dl>
 
-        <div>
+        <div class="rounded-xl bg-slate-50/80 p-5 dark:bg-slate-950/60">
           <p class="font-bold">อัปโหลดรูปโปรไฟล์</p>
           <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">รองรับ JPG, PNG, WEBP ขนาดไม่เกิน 2MB</p>
           <input ref="fileInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp" @change="prepareAvatar(($event.target as HTMLInputElement).files?.[0])" />

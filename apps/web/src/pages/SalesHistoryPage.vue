@@ -173,34 +173,39 @@ onMounted(async () => {
 
     <div class="grid gap-4">
       <AppCard class="dark:bg-slate-900/80">
-        <div class="grid gap-3">
-          <AppDateRangeFilter
-            v-model:date-from="filters.date_from"
-            v-model:date-to="filters.date_to"
-            :date-from-label="app.t('sales.dateFrom')"
-            :date-to-label="app.t('sales.dateTo')"
-          />
-          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <AppInput v-model="filters.receipt_no" :label="app.t('sales.receiptNo')" placeholder="RC..." />
-          <AppInput v-model="filters.cashier_id" :label="app.t('sales.cashierId')" type="number" />
-          <AppSelect v-model="filters.location_id" :label="app.t('sales.location')">
-            <option value="">{{ app.t('sales.allLocations') }}</option>
-            <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
-          </AppSelect>
-          <AppSelect v-model="filters.payment_method" :label="app.t('sales.payment')">
-            <option value="">{{ app.t('sales.allPayments') }}</option>
-            <option value="CASH">{{ app.t('sales.payment.cash') }}</option>
-            <option value="QR">{{ app.t('sales.payment.qr') }}</option>
-          </AppSelect>
-          <AppSelect v-model="filters.status" :label="app.t('sales.status')">
-            <option value="">{{ app.t('sales.allStatuses') }}</option>
-            <option value="COMPLETED">{{ app.t('sales.status.completed') }}</option>
-            <option value="CANCELLED">{{ app.t('sales.status.cancelled') }}</option>
-          </AppSelect>
-          <div class="flex items-end gap-2">
-            <AppButton class="flex-1" icon="search" @click="loadSales">{{ app.t('sales.apply') }}</AppButton>
-            <AppButton class="flex-1" variant="secondary" @click="resetFilters">{{ app.t('sales.reset') }}</AppButton>
+        <div class="grid gap-4">
+          <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_240px] xl:items-end">
+            <AppDateRangeFilter v-model:date-from="filters.date_from" v-model:date-to="filters.date_to"
+              :date-from-label="app.t('sales.dateFrom')" :date-to-label="app.t('sales.dateTo')"
+              :show-shortcuts="false" />
+
+            <div class="grid grid-cols-2 gap-2 xl:w-64">
+              <AppButton icon="search" @click="loadSales">
+                {{ app.t('sales.apply') }}
+              </AppButton>
+
+              <AppButton variant="secondary" @click="resetFilters">
+                {{ app.t('sales.reset') }}
+              </AppButton>
+            </div>
           </div>
+          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <AppInput v-model="filters.receipt_no" :label="app.t('sales.receiptNo')" :placeholder="app.t('sales.receiptPlaceholder')" />
+            <AppInput v-model="filters.cashier_id" :label="app.t('sales.cashierId')" type="number" :placeholder="app.t('sales.cashierPlaceholder')" />
+            <AppSelect v-model="filters.location_id" :label="app.t('sales.location')">
+              <option value="">{{ app.t('sales.locationPlaceholder') }}</option>
+              <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
+            </AppSelect>
+            <AppSelect v-model="filters.payment_method" :label="app.t('sales.payment')">
+              <option value="">{{ app.t('sales.paymentPlaceholder') }}</option>
+              <option value="CASH">{{ app.t('sales.payment.cash') }}</option>
+              <option value="QR">{{ app.t('sales.payment.qr') }}</option>
+            </AppSelect>
+            <AppSelect v-model="filters.status" :label="app.t('sales.status')">
+              <option value="">{{ app.t('sales.statusPlaceholder') }}</option>
+              <option value="COMPLETED">{{ app.t('sales.status.completed') }}</option>
+              <option value="CANCELLED">{{ app.t('sales.status.cancelled') }}</option>
+            </AppSelect>
           </div>
         </div>
       </AppCard>
@@ -217,30 +222,30 @@ onMounted(async () => {
 
       <AppCard v-else class="dark:bg-slate-900/80">
         <div class="hidden overflow-x-auto lg:block">
-          <table class="min-w-full divide-y divide-slate-200 text-sm">
-            <thead class="bg-slate-50">
+          <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+            <thead class="bg-slate-50 dark:bg-slate-950/60">
               <tr>
-                <th class="px-3 py-2 text-left">{{ app.t('sales.receipt') }}</th>
-                <th class="px-3 py-2 text-left">{{ app.t('sales.date') }}</th>
-                <th class="px-3 py-2 text-left">{{ app.t('sales.location') }}</th>
-                <th class="px-3 py-2 text-left">{{ app.t('sales.cashier') }}</th>
-                <th class="px-3 py-2 text-right">{{ app.t('sales.total') }}</th>
-                <th class="px-3 py-2 text-left">{{ app.t('sales.payment') }}</th>
-                <th class="px-3 py-2 text-left">{{ app.t('sales.status') }}</th>
-                <th class="px-3 py-2 text-left">{{ app.t('sales.actions') }}</th>
+                <th class="px-3 py-3 text-left font-black text-slate-600 dark:text-slate-300">{{ app.t('sales.receipt') }}</th>
+                <th class="px-3 py-3 text-left font-black text-slate-600 dark:text-slate-300">{{ app.t('sales.date') }}</th>
+                <th class="px-3 py-3 text-left font-black text-slate-600 dark:text-slate-300">{{ app.t('sales.location') }}</th>
+                <th class="px-3 py-3 text-left font-black text-slate-600 dark:text-slate-300">{{ app.t('sales.cashier') }}</th>
+                <th class="px-3 py-3 text-right font-black text-slate-600 dark:text-slate-300">{{ app.t('sales.total') }}</th>
+                <th class="px-3 py-3 text-right font-black text-slate-600 dark:text-slate-300">{{ app.t('sales.payment') }}</th>
+                <th class="px-3 py-3 text-right font-black text-slate-600 dark:text-slate-300">{{ app.t('sales.status') }}</th>
+                <th class="px-3 py-3 text-right font-black text-slate-600 dark:text-slate-300">{{ app.t('sales.actions') }}</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
-              <tr v-for="sale in visibleSales" :key="sale.id">
-                <td class="px-3 py-2 font-semibold">{{ sale.receipt_no }}</td>
-                <td class="px-3 py-2">{{ formatDate(sale.created_at) }}</td>
-                <td class="px-3 py-2">{{ sale.location_name }}</td>
-                <td class="px-3 py-2">{{ sale.cashier_name }}</td>
-                <td class="px-3 py-2 text-right font-semibold">{{ money(sale.total_amount) }}</td>
-                <td class="px-3 py-2">{{ paymentLabel(sale.payment_method) }}</td>
-                <td class="px-3 py-2"><span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(sale.status)">{{ statusLabel(sale.status) }}</span></td>
-                <td class="px-3 py-2">
-                  <div class="flex flex-wrap gap-2">
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+              <tr v-for="sale in visibleSales" :key="sale.id" class="transition hover:bg-slate-50/80 dark:hover:bg-slate-950/50">
+                <td class="px-3 py-3 font-semibold">{{ sale.receipt_no }}</td>
+                <td class="px-3 py-3">{{ formatDate(sale.created_at) }}</td>
+                <td class="px-3 py-3">{{ sale.location_name }}</td>
+                <td class="px-3 py-3">{{ sale.cashier_name }}</td>
+                <td class="px-3 py-3 text-right font-semibold">{{ money(sale.total_amount) }}</td>
+                <td class="px-3 py-3 text-right">{{ paymentLabel(sale.payment_method) }}</td>
+                <td class="px-3 py-3 text-right"><span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(sale.status)">{{ statusLabel(sale.status) }}</span></td>
+                <td class="px-3 py-3 text-right">
+                  <div class="flex flex-wrap justify-end gap-2">
                     <RouterLink v-if="canViewReceipt" :to="receiptRoute(sale)" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                       <AppIcon name="receipt-text" :size="16" />
                       {{ app.t('sales.viewReceipt') }}

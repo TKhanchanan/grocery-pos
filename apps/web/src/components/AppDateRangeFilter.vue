@@ -13,10 +13,12 @@ const props = withDefaults(defineProps<{
   monthLabel?: string
   disabled?: boolean
   showMonth?: boolean
+  showShortcuts?: boolean
 }>(), {
   month: '',
   disabled: false,
   showMonth: false,
+  showShortcuts: true,
 })
 
 const emit = defineEmits<{
@@ -34,6 +36,22 @@ const viewMonth = ref(today.getMonth())
 
 const monthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 const dayNames = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
+
+const rootClass = computed(() => {
+  if (props.showMonth && props.showShortcuts) {
+    return 'grid w-full gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]'
+  }
+
+  if (props.showMonth && !props.showShortcuts) {
+    return 'grid w-full gap-3 md:grid-cols-2 xl:grid-cols-3'
+  }
+
+  if (!props.showMonth && props.showShortcuts) {
+    return 'grid w-full gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+  }
+
+  return 'grid w-full gap-3 md:grid-cols-2'
+})
 
 const calendarTitle = computed(() => `${monthNames[viewMonth.value]} ${viewYear.value + 543}`)
 const monthTitle = computed(() => String(viewYear.value + 543))
@@ -120,6 +138,11 @@ function setToday() {
 }
 
 function setThisMonth() {
+  const date = new Date()
+  const firstDay = new Date(date.getFullYear(), date.getMonth(), 1)
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0)
+  emit('update:dateFrom', dateKey(firstDay))
+  emit('update:dateTo', dateKey(lastDay))
   emit('update:month', monthKey())
   setOpenPicker('')
 }
@@ -156,8 +179,8 @@ function fieldClass(active: boolean) {
 </script>
 
 <template>
-  <div ref="root" class="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto]">
-    <div class="relative grid gap-1.5 text-sm">
+  <div ref="root" :class="rootClass">
+    <div class="relative grid min-w-0 gap-1.5 text-sm">
       <span class="font-semibold text-slate-700 dark:text-slate-200">{{ dateFromLabel }}</span>
       <button type="button" :class="fieldClass(openPicker === 'from')" :disabled="disabled" @click="setOpenPicker(openPicker === 'from' ? '' : 'from')">
         <span>{{ formatDate(dateFrom) }}</span>
@@ -180,7 +203,7 @@ function fieldClass(active: boolean) {
       </div>
     </div>
 
-    <div class="relative grid gap-1.5 text-sm">
+    <div class="relative grid min-w-0 gap-1.5 text-sm">
       <span class="font-semibold text-slate-700 dark:text-slate-200">{{ dateToLabel }}</span>
       <button type="button" :class="fieldClass(openPicker === 'to')" :disabled="disabled" @click="setOpenPicker(openPicker === 'to' ? '' : 'to')">
         <span>{{ formatDate(dateTo) }}</span>
@@ -203,11 +226,12 @@ function fieldClass(active: boolean) {
       </div>
     </div>
 
-    <div v-if="showMonth" class="relative grid gap-1.5 text-sm">
+    <div v-if="showMonth" class="relative grid min-w-0 gap-1.5 text-sm">
       <span class="font-semibold text-slate-700 dark:text-slate-200">{{ monthLabel }}</span>
       <button type="button" :class="fieldClass(openPicker === 'month')" :disabled="disabled" @click="setOpenPicker(openPicker === 'month' ? '' : 'month')">
-        <span>{{ formatMonth(month) }}</span>
-        <AppIcon name="calendar" :size="17" />
+        <div v-if="showShortcuts" class="flex items-end gap-2">
+          <AppIcon name="calendar" :size="17" />
+        </div>
       </button>
       <div v-if="openPicker === 'month'" class="absolute left-0 top-full z-[110] mt-2 w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-white p-3 shadow-2xl shadow-slate-950/20 dark:bg-slate-900 dark:shadow-black/35">
         <div class="flex items-center justify-between gap-2">
@@ -223,9 +247,18 @@ function fieldClass(active: boolean) {
       </div>
     </div>
 
-    <div class="flex items-end gap-2">
-      <button type="button" class="min-h-11 rounded-xl bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" :disabled="disabled" @click="setToday">วันนี้</button>
-      <button v-if="showMonth" type="button" class="min-h-11 rounded-xl bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" :disabled="disabled" @click="setThisMonth">เดือนนี้</button>
+    <div v-if="showShortcuts" class="flex items-end gap-2">
+      <button type="button"
+        class="min-h-11 rounded-xl bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+        :disabled="disabled" @click="setToday">
+        วันนี้
+      </button>
+
+      <button v-if="showMonth" type="button"
+        class="min-h-11 rounded-xl bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+        :disabled="disabled" @click="setThisMonth">
+        เดือนนี้
+      </button>
     </div>
   </div>
 </template>

@@ -19,13 +19,13 @@ defineEmits<{ close: []; confirm: [] }>()
 </script>
 
 <template>
-  <AppModal :open="open" :title="title ?? 'Please confirm'" centered @close="$emit('close')">
+  <AppModal :open="open" :title="title ?? 'Please confirm'" centered @close="$emit('close')" :size="'lg'">
     <p class="text-center text-sm text-slate-600 dark:text-slate-300">{{ message ?? 'Are you sure you want to continue?' }}</p>
     <p v-if="consequence" class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">{{ consequence }}</p>
     <div class="mt-3">
       <slot />
     </div>
-    <div class="mt-5 flex justify-center gap-2">
+    <div class="mt-5 flex justify-end gap-2">
       <AppButton variant="secondary" :disabled="loading" @click="$emit('close')">{{ cancelLabel ?? 'Cancel' }}</AppButton>
       <AppButton :variant="destructive ? 'danger' : 'primary'" :loading="loading" @click="$emit('confirm')">{{ confirmLabel ?? 'Confirm' }}</AppButton>
     </div>

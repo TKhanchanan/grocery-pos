@@ -12,7 +12,6 @@ export interface ToastMessage {
   type: ToastType
   message: string
   description?: string
-  resultModal?: boolean
 }
 
 function readStoredTextSize(): TextSize {
@@ -75,10 +74,10 @@ export const useAppStore = defineStore('app', () => {
     return translateMessage(language.value, key)
   }
 
-  function pushToast(input: ToastType | { type?: ToastType; message: string; description?: string; resultModal?: boolean }, message?: string, description?: string) {
+  function pushToast(input: ToastType | { type?: ToastType; message: string; description?: string }, message?: string, description?: string) {
     const toast = typeof input === 'string'
       ? { type: input, message: message ?? '', description }
-      : { type: input.type ?? 'success', message: input.message, description: input.description, resultModal: input.resultModal }
+      : { type: input.type ?? 'success', message: input.message, description: input.description }
     const id = ++toastID
     toasts.value.push({ id, ...toast })
     window.setTimeout(() => removeToast(id), 4200)

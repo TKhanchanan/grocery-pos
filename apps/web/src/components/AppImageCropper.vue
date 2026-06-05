@@ -63,14 +63,14 @@ async function crop() {
         ซูม
         <input v-model.number="zoom" class="accent-brand-600" type="range" min="1" max="2.4" step="0.05" />
       </label>
-      <label class="grid gap-1.5 font-semibold text-slate-700 dark:text-slate-200">
+      <!-- <label class="grid gap-1.5 font-semibold text-slate-700 dark:text-slate-200">
         ตำแหน่งแนวนอน
         <input v-model.number="positionX" class="accent-brand-600" type="range" min="0" max="100" step="1" />
       </label>
       <label class="grid gap-1.5 font-semibold text-slate-700 dark:text-slate-200">
         ตำแหน่งแนวตั้ง
         <input v-model.number="positionY" class="accent-brand-600" type="range" min="0" max="100" step="1" />
-      </label>
+      </label> -->
     </div>
     <div class="flex justify-center gap-2">
       <AppButton variant="secondary" @click="$emit('cancel')">ยกเลิก</AppButton>

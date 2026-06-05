@@ -19,6 +19,8 @@ import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import { useCartStore } from '../stores/cart'
 import type { Location, POSProduct, Receipt, StockStatus } from '../types/navigation'
+import { formatThaiDateTime } from '../utils/date'
+import { prepareReceiptPrintArea, resetReceiptPrintArea } from '../utils/print'
 
 const app = useAppStore()
 const auth = useAuthStore()
@@ -31,6 +33,7 @@ const barcodeInput = ref('')
 const loading = ref(false)
 const error = ref('')
 const successReceipt = ref<Receipt | null>(null)
+const saleConfirmOpen = ref(false)
 const scannerOpen = ref(false)
 const scannerMessageKey = ref<TranslationKey>('pos.scannerStarting')
 const videoRef = ref<HTMLVideoElement | null>(null)
@@ -44,6 +47,10 @@ const canViewReceipt = computed(() => auth.hasPermission('sales.receipt.view'))
 const receiptPath = computed(() => successReceipt.value ? `/sales/${successReceipt.value.id}/receipt` : '/receipt-detail')
 const scannerMessage = computed(() => app.t(scannerMessageKey.value))
 const productCountLabel = computed(() => t('pos.productsCount', { count: products.value.length }))
+const receiptPreviewDate = computed(() => saleConfirmOpen.value ? formatThaiDateTime(new Date()) : '-')
+
+const handleBeforePrint = () => prepareReceiptPrintArea()
+const handleAfterPrint = () => resetReceiptPrintArea()
 
 function money(value: number) {
   const locale = app.language === 'th' ? 'th-TH' : 'en-US'
@@ -117,7 +124,7 @@ function addProduct(product: POSProduct) {
     return
   }
   cart.addItem(product)
-  app.pushToast({ type: 'success', message: app.t('pos.addedToCart'), description: product.name, resultModal: false })
+  app.pushToast({ type: 'success', message: app.t('pos.addedToCart'), description: product.name })
   if (cart.paymentMethod === 'QR') cart.setReceivedAmount(cart.totalAmount)
   if (cart.paymentMethod === 'CASH' && cart.receivedAmount < cart.totalAmount) cart.setReceivedAmount(cart.totalAmount)
 }
@@ -137,6 +144,23 @@ function addBarcode() {
   barcodeInput.value = ''
 }
 
+function openSaleConfirm() {
+  if (!canSubmit.value) return
+  error.value = ''
+  saleConfirmOpen.value = true
+}
+
+function closeSaleConfirm() {
+  if (cart.isSubmitting) return
+  saleConfirmOpen.value = false
+}
+
+function printReceiptPreview() {
+  if (!canSubmit.value || cart.isSubmitting) return
+  prepareReceiptPrintArea()
+  window.print()
+}
+
 async function submitSale() {
   if (!selectedLocationID.value || cart.isSubmitting) return
   error.value = ''
@@ -150,6 +174,7 @@ async function submitSale() {
       items: cart.items.map((item) => ({ product_id: item.productId, quantity: item.quantity })),
     })
     successReceipt.value = receipt
+    saleConfirmOpen.value = false
     cart.clearCart()
     await loadProducts()
     app.pushToast({ type: 'success', message: app.t('pos.saleCompleted'), description: t('pos.saleSuccessDescription', { receipt: receipt.receipt_no }) })
@@ -213,11 +238,15 @@ watch(() => cart.totalAmount, (total) => {
 })
 
 onMounted(async () => {
+  window.addEventListener('beforeprint', handleBeforePrint)
+  window.addEventListener('afterprint', handleAfterPrint)
   await loadLocations()
   await loadProducts()
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('beforeprint', handleBeforePrint)
+  window.removeEventListener('afterprint', handleAfterPrint)
   window.clearTimeout(loadTimer)
   closeScanner()
   cart.clearCart()
@@ -264,7 +293,7 @@ onBeforeUnmount(() => {
         <div v-else class="grid gap-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300 mb-1">{{ app.t('pos.productsTitle') }}</p>
+              <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300 mb-1 mt-3">{{ app.t('pos.productsTitle') }}</p>
               <p class="text-sm text-slate-500 dark:text-slate-400">{{ productCountLabel }}</p>
             </div>
           </div>
@@ -311,13 +340,13 @@ onBeforeUnmount(() => {
 
       <aside class="hidden xl:block">
         <div class="sticky top-24">
-          <POSCartPanel :submit-disabled="!canSubmit" @submit-sale="submitSale" />
+          <POSCartPanel :submit-disabled="!canSubmit" @submit-sale="openSaleConfirm" />
         </div>
       </aside>
     </div>
 
     <div class="mt-4 xl:hidden">
-      <POSCartPanel :submit-disabled="!canSubmit" @submit-sale="submitSale" />
+      <POSCartPanel :submit-disabled="!canSubmit" @submit-sale="openSaleConfirm" />
     </div>
 
     <div class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/90 p-3 shadow-lg backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/90 xl:hidden">
@@ -326,7 +355,7 @@ onBeforeUnmount(() => {
           <p class="text-xs text-slate-500 dark:text-slate-400">{{ app.t('pos.cart') }}</p>
           <p class="font-bold">{{ t('pos.mobileSummary', { count: cart.totalItems, amount: money(cart.totalAmount) }) }}</p>
         </div>
-        <AppButton :disabled="!canSubmit" :loading="cart.isSubmitting" @click="submitSale">
+        <AppButton :disabled="!canSubmit" :loading="cart.isSubmitting" @click="openSaleConfirm">
           {{ app.t('pos.confirm') }}
         </AppButton>
       </div>
@@ -339,6 +368,60 @@ onBeforeUnmount(() => {
         <div class="grid gap-2 sm:grid-cols-[1fr_auto]">
           <AppInput v-model="barcodeInput" :label="app.t('pos.manualFallback')" :placeholder="app.t('pos.barcodePlaceholder')" @keyup.enter="addBarcode" />
           <div class="flex items-end"><AppButton class="w-full" @click="addBarcode">{{ app.t('pos.add') }}</AppButton></div>
+        </div>
+      </div>
+    </AppModal>
+
+    <AppModal :open="saleConfirmOpen" :title="app.t('pos.confirmSaleTitle')" :description="app.t('pos.confirmSaleDescription')" size="lg" @close="closeSaleConfirm">
+      <div class="grid gap-4">
+        <article id="receipt-print-area" class="mx-auto w-full max-w-[420px] rounded-xl bg-white p-4 text-slate-950 shadow-sm ring-1 ring-slate-200">
+          <header class="border-b border-dashed border-slate-300 pb-3 text-center">
+            <p class="text-lg font-black">Grocery POS</p>
+            <p class="text-sm font-semibold text-slate-600">{{ app.t('pos.receiptPreview') }}</p>
+          </header>
+
+          <dl class="mt-3 grid gap-1.5 text-xs">
+            <div class="flex justify-between gap-3"><dt class="text-slate-500">{{ app.t('receipt.receiptNo') }}</dt><dd class="text-right font-bold">{{ app.t('pos.previewReceiptNo') }}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-slate-500">{{ app.t('receipt.date') }}</dt><dd class="text-right font-bold">{{ receiptPreviewDate }}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-slate-500">{{ app.t('receipt.cashier') }}</dt><dd class="text-right font-bold">{{ auth.user?.fullName ?? auth.user?.username ?? '-' }}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-slate-500">{{ app.t('receipt.location') }}</dt><dd class="text-right font-bold">{{ selectedLocation?.name ?? '-' }}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-slate-500">{{ app.t('receipt.paymentMethod') }}</dt><dd class="text-right font-bold">{{ paymentLabel(cart.paymentMethod) }}</dd></div>
+          </dl>
+
+          <section class="mt-3 border-y border-dashed border-slate-300 py-3">
+            <div class="grid grid-cols-[minmax(0,1fr)_34px_64px_72px] gap-2 text-xs font-black text-slate-500">
+              <span>{{ app.t('receipt.items') }}</span>
+              <span class="text-right">{{ app.t('receipt.quantity') }}</span>
+              <span class="text-right">{{ app.t('receipt.price') }}</span>
+              <span class="text-right">{{ app.t('receipt.subtotal') }}</span>
+            </div>
+            <div v-for="item in cart.items" :key="item.productId" class="grid grid-cols-[minmax(0,1fr)_34px_64px_72px] gap-2 py-1.5 text-xs">
+              <span class="min-w-0">
+                <b class="block overflow-wrap-anywhere">{{ item.name }}</b>
+                <small class="block text-slate-500">{{ item.sku }}</small>
+              </span>
+              <span class="text-right">{{ item.quantity }}</span>
+              <span class="text-right">{{ money(item.price) }}</span>
+              <span class="text-right font-bold">{{ money(item.price * item.quantity) }}</span>
+            </div>
+          </section>
+
+          <dl class="mt-3 grid gap-1.5 text-sm">
+            <div class="flex justify-between gap-3"><dt class="text-slate-500">{{ app.t('receipt.subtotal') }}</dt><dd class="text-right font-bold">{{ money(cart.totalAmount) }}</dd></div>
+            <div class="flex justify-between gap-3 border-t border-dashed border-slate-300 pt-2 text-base font-black"><dt>{{ app.t('receipt.total') }}</dt><dd class="text-right">{{ money(cart.totalAmount) }}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-slate-500">{{ app.t('receipt.received') }}</dt><dd class="text-right font-bold">{{ money(cart.receivedAmount) }}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-slate-500">{{ app.t('receipt.change') }}</dt><dd class="text-right font-bold">{{ money(cart.changeAmount) }}</dd></div>
+          </dl>
+
+          <footer class="mt-3 border-t border-dashed border-slate-300 pt-3 text-center text-xs font-bold text-slate-600">
+            {{ app.t('receipt.thankYou') }}
+          </footer>
+        </article>
+
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <AppButton class="sm:w-auto" variant="secondary" :disabled="cart.isSubmitting" @click="closeSaleConfirm">{{ app.t('pos.cancel') }}</AppButton>
+          <AppButton class="sm:w-40" variant="secondary" icon="receipt-text" :disabled="!canSubmit || cart.isSubmitting" @click="printReceiptPreview">{{ app.t('pos.printReceiptPreview') }}</AppButton>
+          <AppButton class="sm:min-w-52" :loading="cart.isSubmitting" :disabled="!canSubmit" @click="submitSale">{{ app.t('pos.confirmSale') }}</AppButton>
         </div>
       </div>
     </AppModal>
@@ -357,7 +440,7 @@ onBeforeUnmount(() => {
         </dl>
         <div class="flex justify-end gap-2">
           <AppButton variant="secondary" @click="successReceipt = null">{{ app.t('pos.continueSelling') }}</AppButton>
-          <RouterLink v-if="canViewReceipt" :to="receiptPath" class="focus-ring inline-flex min-h-11 items-center justify-center rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm shadow-brand-600/20 dark:bg-emerald-500 dark:text-slate-950">
+          <RouterLink v-if="canViewReceipt" :to="receiptPath" class="focus-ring inline-flex min-h-11 items-center justify-center rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm shadow-brand-600/20 dark:bg-teal-500 dark:text-slate-950">
             {{ app.t('pos.viewReceipt') }}
           </RouterLink>
         </div>
@@ -373,5 +456,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
 }
 </style>

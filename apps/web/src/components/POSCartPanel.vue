@@ -152,7 +152,7 @@ function setQuantity(productId: number, quantity: number) {
           <p class="text-xl font-black">{{ money(cart.changeAmount) }}</p>
         </div>
         <div class="rounded-lg bg-slate-50 p-3 dark:bg-slate-950/60">
-          <p class="text-slate-500 dark:text-slate-400">{{ app.t('pos.status') }}</p>
+          <p class="text-slate-500 dark:text-slate-400 mb-1">{{ app.t('pos.status') }}</p>
           <AppBadge :tone="checkoutStatus.tone">{{ checkoutStatus.label }}</AppBadge>
         </div>
       </div>

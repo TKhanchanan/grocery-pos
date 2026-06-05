@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { apiClient } from '../api/client'
 import AppButton from '../components/AppButton.vue'
@@ -8,6 +8,7 @@ import PageHeader from '../components/PageHeader.vue'
 import { useAppStore } from '../stores/app'
 import type { Receipt } from '../types/navigation'
 import { formatThaiDateTime } from '../utils/date'
+import { prepareReceiptPrintArea, resetReceiptPrintArea } from '../utils/print'
 
 const app = useAppStore()
 const route = useRoute()
@@ -20,6 +21,8 @@ const receiptID = computed(() => {
   return String(paramID ?? route.query.id ?? '')
 })
 const locale = computed(() => app.language === 'th' ? 'th-TH' : 'en-US')
+const handleBeforePrint = () => prepareReceiptPrintArea()
+const handleAfterPrint = () => resetReceiptPrintArea()
 
 function money(value: number) {
   return value.toLocaleString(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -49,11 +52,20 @@ async function loadReceipt() {
 
 function printReceipt() {
   if (!receipt.value || loading.value) return
+  prepareReceiptPrintArea()
   window.print()
 }
 
 watch(receiptID, loadReceipt)
-onMounted(loadReceipt)
+onMounted(() => {
+  window.addEventListener('beforeprint', handleBeforePrint)
+  window.addEventListener('afterprint', handleAfterPrint)
+  loadReceipt()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeprint', handleBeforePrint)
+  window.removeEventListener('afterprint', handleAfterPrint)
+})
 </script>
 
 <template>

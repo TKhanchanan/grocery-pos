@@ -271,22 +271,22 @@ watch(() => route.path, () => {
     </aside>
 
     <AppDrawer :open="app.sidebarOpen" @close="app.closeSidebar">
-      <div class="mb-4 flex items-center gap-3 rounded-xl bg-brand-50 p-3 shadow-sm dark:bg-slate-900">
-        <img class="h-11 w-11 shrink-0 rounded-xl object-contain shadow-lg shadow-brand-600/20" :src="logoUrl" :alt="app.t('app.name')" />
+      <div class="mb-4 flex items-center gap-3 rounded-xl bg-slate-950/70 p-3 shadow-lg shadow-black/20">
+        <img class="h-11 w-11 shrink-0 rounded-xl object-contain shadow-brand-600/20" :src="logoUrl" :alt="app.t('app.name')" />
         <div class="min-w-0">
-          <p class="truncate text-xs font-semibold uppercase text-brand-700">{{ app.t('app.name') }}</p>
-          <h1 class="truncate text-base font-black">{{ app.t('app.subtitle') }}</h1>
+          <p class="truncate text-xs font-semibold uppercase text-teal-300">{{ app.t('app.name') }}</p>
+          <h1 class="truncate text-base font-black text-white">{{ app.t('app.subtitle') }}</h1>
         </div>
       </div>
       <nav class="grid gap-3">
         <section v-for="group in visibleNavGroups" :key="group.labelKey" class="grid gap-1">
-          <p class="px-3 text-[11px] font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">{{ app.t(group.labelKey) }}</p>
+          <p class="px-3 text-[11px] font-black uppercase tracking-wide text-slate-400">{{ app.t(group.labelKey) }}</p>
           <RouterLink
             v-for="item in group.items"
             :key="item.to"
             :to="item.to"
-            class="rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-teal-400/10"
-            :class="{ 'bg-brand-600 text-white dark:bg-teal-300 dark:!text-slate-950': isActive(item.to) }"
+            class="rounded-xl px-3 py-2 text-sm font-medium text-slate-300 hover:bg-teal-400/10 hover:text-white"
+            :class="{ 'bg-teal-300 !text-slate-950': isActive(item.to) }"
             @click="app.closeSidebar"
           >
             <span class="flex items-center justify-start gap-3">

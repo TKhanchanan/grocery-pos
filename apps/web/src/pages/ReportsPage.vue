@@ -18,7 +18,7 @@ import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { IconName } from '../types/icons'
 import type { Location, PaymentSummaryReport, ProductSalesReport, SalesPeriodReport, StockReport, StockStatus } from '../types/navigation'
-import { formatThaiDate } from '../utils/date'
+import { formatThaiDate, formatThaiNumericDate } from '../utils/date'
 
 type ReportKey = 'daily-sales' | 'monthly-sales' | 'best-selling' | 'profit-by-product' | 'stock' | 'inventory-valuation' | 'payment-summary' | 'low-stock' | 'reorder'
 type ReportRow = SalesPeriodReport | ProductSalesReport | StockReport | PaymentSummaryReport
@@ -200,6 +200,18 @@ function formatPeriod(value: string) {
   return formatted === normalized ? text : formatted
 }
 
+function formatExportPeriod(value: string) {
+  if (!value) return '-'
+  const text = String(value).trim()
+  if (activeTab.value === 'monthly-sales') {
+    const monthMatch = text.match(/^(\d{4})[-/](\d{1,2})$/)
+    if (monthMatch) return formatThaiNumericDate(`${monthMatch[1]}-${monthMatch[2].padStart(2, '0')}-01T00:00:00`)
+  }
+  const normalized = /^\d{4}-\d{1,2}-\d{1,2}$/.test(text) ? `${text}T00:00:00` : text
+  const formatted = formatThaiNumericDate(normalized)
+  return formatted === normalized ? text : formatted
+}
+
 function profitClass(value: number) {
   return value < 0 ? 'text-red-600 dark:text-red-300' : 'text-brand-700 dark:text-emerald-200'
 }
@@ -305,7 +317,7 @@ function activeExportRows(): CsvCell[][] {
     const periodLabel = activeTab.value === 'monthly-sales' ? app.t('reports.month') : app.t('reports.period')
     return [
       [periodLabel, app.t('reports.receipts'), app.t('reports.revenue'), app.t('reports.cost'), app.t('reports.profit')],
-      ...(rows.value as SalesPeriodReport[]).map((row) => [row.period, row.receipt_count, row.revenue.toFixed(2), row.cost.toFixed(2), row.profit.toFixed(2)]),
+      ...(rows.value as SalesPeriodReport[]).map((row) => [formatExportPeriod(row.period), row.receipt_count, row.revenue.toFixed(2), row.cost.toFixed(2), row.profit.toFixed(2)]),
     ]
   }
   if (isProductReport.value) {
@@ -387,6 +399,11 @@ async function loadLocations() {
 
 function setTab(key: ReportKey) {
   activeTab.value = key
+  filters.date_from = ''
+  filters.date_to = ''
+  filters.month = ''
+  filters.location_id = ''
+  page.value = 1
   loadReport()
 }
 

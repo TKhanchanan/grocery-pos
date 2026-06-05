@@ -101,7 +101,7 @@ func (s *Server) inventoryExportRows(ctx context.Context, month string) ([][]str
 		if err := rows.Scan(&sku, &productName, &categoryName, &locationName, &quantity, &unitCost, &totalValue, &threshold, &reorderPoint); err != nil {
 			return nil, err
 		}
-		out = append(out, []string{month, sku, productName, categoryName, locationName, strconv.Itoa(quantity), moneyString(unitCost), moneyString(totalValue), strconv.Itoa(threshold), strconv.Itoa(reorderPoint)})
+		out = append(out, []string{thaiCSVMonth(month), sku, productName, categoryName, locationName, strconv.Itoa(quantity), moneyString(unitCost), moneyString(totalValue), strconv.Itoa(threshold), strconv.Itoa(reorderPoint)})
 	}
 	return out, rows.Err()
 }
@@ -159,7 +159,7 @@ func (s *Server) salesExportRows(ctx context.Context, r *http.Request) ([][]stri
 		if err := rows.Scan(&receiptNo, &createdAt, &locationName, &cashierName, &paymentMethod, &revenue, &cost, &profit); err != nil {
 			return nil, err
 		}
-		out = append(out, []string{receiptNo, createdAt.Format("2006-01-02 15:04:05"), locationName, cashierName, paymentMethod, moneyString(revenue), moneyString(cost), moneyString(profit)})
+		out = append(out, []string{receiptNo, thaiCSVDateTime(createdAt), locationName, cashierName, paymentMethod, moneyString(revenue), moneyString(cost), moneyString(profit)})
 	}
 	return out, rows.Err()
 }
@@ -181,7 +181,7 @@ func (s *Server) profitExportRows(ctx context.Context, r *http.Request, month st
 	}
 	out := [][]string{{"month", "product_id", "product_name", "sku", "quantity", "revenue", "cost", "profit"}}
 	for _, row := range reports {
-		out = append(out, []string{month, strconv.FormatUint(row.ProductID, 10), row.ProductName, row.SKU, strconv.Itoa(row.Quantity), moneyString(row.Revenue), moneyString(row.Cost), moneyString(row.Profit)})
+		out = append(out, []string{thaiCSVMonth(month), strconv.FormatUint(row.ProductID, 10), row.ProductName, row.SKU, strconv.Itoa(row.Quantity), moneyString(row.Revenue), moneyString(row.Cost), moneyString(row.Profit)})
 	}
 	return out, nil
 }
@@ -206,4 +206,20 @@ func writeCSV(w http.ResponseWriter, filename string, rows [][]string) {
 
 func moneyString(value float64) string {
 	return fmt.Sprintf("%.2f", value)
+}
+
+func thaiCSVDate(value time.Time) string {
+	return fmt.Sprintf("%02d/%02d/%d", value.Day(), value.Month(), value.Year()+543)
+}
+
+func thaiCSVDateTime(value time.Time) string {
+	return fmt.Sprintf("%s %02d:%02d:%02d", thaiCSVDate(value), value.Hour(), value.Minute(), value.Second())
+}
+
+func thaiCSVMonth(month string) string {
+	value, err := time.Parse("2006-01", month)
+	if err != nil {
+		return month
+	}
+	return thaiCSVDate(value)
 }
