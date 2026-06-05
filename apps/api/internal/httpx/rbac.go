@@ -45,6 +45,15 @@ type RoleInput struct {
 	IsActive    bool   `json:"is_active"`
 }
 
+type PermissionInput struct {
+	Code        string `json:"code"`
+	Module      string `json:"module"`
+	Action      string `json:"action"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	SortOrder   int    `json:"sort_order"`
+}
+
 func (s *Server) roles(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -166,12 +175,51 @@ func (s *Server) deleteRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) permissions(w http.ResponseWriter, r *http.Request) {
-	items, err := s.permissionList(r.Context())
+	switch r.Method {
+	case http.MethodGet:
+		items, err := s.permissionList(r.Context())
+		if err != nil {
+			response.ErrorJSON(w, http.StatusInternalServerError, "PERMISSIONS_LOAD_FAILED", "Could not load permissions.")
+			return
+		}
+		response.JSON(w, http.StatusOK, items)
+	case http.MethodPost:
+		var body PermissionInput
+		if err := readJSON(r, &body); err != nil {
+			response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+			return
+		}
+		permission, err := s.createPermission(r.Context(), body)
+		if err != nil {
+			response.ErrorJSON(w, http.StatusBadRequest, "PERMISSION_CREATE_FAILED", err.Error())
+			return
+		}
+		s.audit(r.Context(), "PERMISSION_CREATED", "permission", permission.ID, nil, permission)
+		response.JSON(w, http.StatusCreated, permission)
+	default:
+		response.ErrorJSON(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.")
+	}
+}
+
+func (s *Server) permissionDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(r, "id")
 	if err != nil {
-		response.ErrorJSON(w, http.StatusInternalServerError, "PERMISSIONS_LOAD_FAILED", "Could not load permissions.")
+		response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid permission id.")
 		return
 	}
-	response.JSON(w, http.StatusOK, items)
+	var body PermissionInput
+	if err := readJSON(r, &body); err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	before, _ := s.permissionByID(r.Context(), id)
+	permission, err := s.updatePermission(r.Context(), id, body)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusBadRequest, "PERMISSION_UPDATE_FAILED", err.Error())
+		return
+	}
+	s.audit(r.Context(), "PERMISSION_UPDATED", "permission", permission.ID, before, permission)
+	response.JSON(w, http.StatusOK, permission)
 }
 
 func (s *Server) groupedPermissions(w http.ResponseWriter, r *http.Request) {
@@ -333,6 +381,45 @@ func (s *Server) permissionList(ctx context.Context) ([]PermissionRecord, error)
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func (s *Server) permissionByID(ctx context.Context, id uint64) (PermissionRecord, error) {
+	var item PermissionRecord
+	err := s.db.QueryRowContext(ctx, `SELECT id, code, module, action, name, description, sort_order, created_at, updated_at FROM permissions WHERE id=?`, id).
+		Scan(&item.ID, &item.Code, &item.Module, &item.Action, &item.Name, &item.Description, &item.SortOrder, &item.CreatedAt, &item.UpdatedAt)
+	return item, err
+}
+
+func (s *Server) createPermission(ctx context.Context, body PermissionInput) (PermissionRecord, error) {
+	input, err := normalizePermissionInput(body)
+	if err != nil {
+		return PermissionRecord{}, err
+	}
+	result, err := s.db.ExecContext(ctx, `
+		INSERT INTO permissions(code, module, action, name, description, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?)`, input.Code, input.Module, input.Action, input.Name, input.Description, input.SortOrder)
+	if err != nil {
+		return PermissionRecord{}, err
+	}
+	id, _ := result.LastInsertId()
+	return s.permissionByID(ctx, uint64(id))
+}
+
+func (s *Server) updatePermission(ctx context.Context, id uint64, body PermissionInput) (PermissionRecord, error) {
+	if _, err := s.permissionByID(ctx, id); err != nil {
+		return PermissionRecord{}, err
+	}
+	input, err := normalizePermissionInput(body)
+	if err != nil {
+		return PermissionRecord{}, err
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE permissions
+		SET code=?, module=?, action=?, name=?, description=?, sort_order=?
+		WHERE id=?`, input.Code, input.Module, input.Action, input.Name, input.Description, input.SortOrder, id); err != nil {
+		return PermissionRecord{}, err
+	}
+	return s.permissionByID(ctx, id)
 }
 
 func (s *Server) permissionsForRole(ctx context.Context, roleID uint64) ([]string, error) {
@@ -594,6 +681,41 @@ func normalizePermissionCodes(codes []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func normalizePermissionPart(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	for _, ch := range value {
+		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' || ch == '.' {
+			b.WriteRune(ch)
+		}
+	}
+	return b.String()
+}
+
+func normalizePermissionInput(body PermissionInput) (PermissionInput, error) {
+	module := normalizePermissionPart(body.Module)
+	action := normalizePermissionPart(body.Action)
+	code := normalizePermissionPart(body.Code)
+	name := strings.TrimSpace(body.Name)
+	if code == "" && module != "" && action != "" {
+		code = module + "." + action
+	}
+	if module == "" || action == "" || code == "" || name == "" {
+		return PermissionInput{}, errors.New("permission code, module, action, and name are required")
+	}
+	if !strings.Contains(code, ".") {
+		return PermissionInput{}, errors.New("permission code must use module.action format")
+	}
+	return PermissionInput{
+		Code:        code,
+		Module:      module,
+		Action:      action,
+		Name:        name,
+		Description: strings.TrimSpace(body.Description),
+		SortOrder:   body.SortOrder,
+	}, nil
 }
 
 func uniqueUint64(values []uint64) []uint64 {

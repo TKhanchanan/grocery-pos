@@ -33,4 +33,5 @@ export type IconName =
   | 'sparkles'
   | 'sun'
   | 'moon'
+  | 'text-size'
   | 'role'

@@ -80,6 +80,7 @@ withDefaults(defineProps<{ name: IconName; size?: number; strokeWidth?: number }
     <template v-else-if="name === 'search'"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></template>
     <template v-else-if="name === 'sun'"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></template>
     <template v-else-if="name === 'moon'"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.7 6.7 0 0 0 9.8 9.8Z" /></template>
+    <template v-else-if="name === 'text-size'"><path d="M4 7V4h10v3" /><path d="M9 4v16" /><path d="M6 20h6" /><path d="M15 13v-2h5v2" /><path d="M17.5 11v9" /><path d="M16 20h3" /></template>
     <template v-else-if="name === 'role'">
       <path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3Z" />
       <path d="M12 11a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z" />

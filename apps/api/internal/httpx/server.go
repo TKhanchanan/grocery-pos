@@ -47,6 +47,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/roles/{id}/permissions", s.requirePermission(s.rolePermissions, "roles.view"))
 	mux.HandleFunc("PUT /api/v1/roles/{id}/permissions", s.requirePermission(s.rolePermissions, "roles.assign_permissions"))
 	mux.HandleFunc("GET /api/v1/permissions", s.requirePermission(s.permissions, "permissions.view"))
+	mux.HandleFunc("POST /api/v1/permissions", s.requirePermission(s.permissions, "roles.assign_permissions"))
+	mux.HandleFunc("PATCH /api/v1/permissions/{id}", s.requirePermission(s.permissionDetail, "roles.assign_permissions"))
 	mux.HandleFunc("GET /api/v1/permissions/grouped", s.requirePermission(s.groupedPermissions, "permissions.view"))
 	mux.HandleFunc("GET /api/v1/categories", s.requirePermission(s.categories, "categories.view"))
 	mux.HandleFunc("POST /api/v1/categories", s.requirePermission(s.categories, "categories.create"))

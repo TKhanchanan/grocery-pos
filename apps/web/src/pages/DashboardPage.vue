@@ -411,7 +411,7 @@ onMounted(loadDashboard)
         </AppCard>
       </div>
 
-      <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div class="mt-5 grid gap-4">
         <AppCard class="dashboard-section dark:bg-slate-900/80">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -435,34 +435,6 @@ onMounted(loadDashboard)
                 <p class="font-black">{{ money(sale.total_amount) }}</p>
               </div>
             </article>
-          </div>
-        </AppCard>
-
-        <AppCard class="dashboard-section dark:bg-slate-900/80">
-          <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.insight.eyebrow') }}</p>
-          <h2 class="mt-1 text-xl font-black">{{ app.t('dashboard.insight.title') }}</h2>
-          <div class="mt-5 grid gap-3">
-            <RouterLink to="/alerts" class="rounded-2xl border border-amber-200 bg-amber-50 p-4 transition hover:shadow-md dark:border-amber-400/30 dark:bg-amber-500/10">
-              <div class="flex items-center justify-between gap-3">
-                <span class="font-black text-amber-900 dark:text-amber-100">{{ app.t('dashboard.insight.openAlerts') }}</span>
-                <span class="text-2xl font-black text-amber-800 dark:text-amber-200">{{ alertTotal }}</span>
-              </div>
-              <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">{{ app.t('dashboard.insight.openAlertsDescription') }}</p>
-            </RouterLink>
-            <RouterLink to="/purchase-orders" class="rounded-2xl border border-sky-200 bg-sky-50 p-4 transition hover:shadow-md dark:border-sky-400/30 dark:bg-sky-500/10">
-              <div class="flex items-center justify-between gap-3">
-                <span class="font-black text-sky-900 dark:text-sky-100">{{ app.t('dashboard.insight.purchasePlanning') }}</span>
-                <span class="text-2xl font-black text-sky-800 dark:text-sky-200">{{ reorderCount }}</span>
-              </div>
-              <p class="mt-1 text-sm text-sky-800 dark:text-sky-200">{{ app.t('dashboard.insight.purchasePlanningDescription') }}</p>
-            </RouterLink>
-            <RouterLink to="/exports" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 transition hover:shadow-md dark:border-emerald-400/30 dark:bg-emerald-500/10">
-              <div class="flex items-center justify-between gap-3">
-                <span class="font-black text-emerald-900 dark:text-emerald-100">{{ app.t('dashboard.insight.readyExport') }}</span>
-                <AppIcon name="download" class="text-emerald-700 dark:text-emerald-200" />
-              </div>
-              <p class="mt-1 text-sm text-emerald-800 dark:text-emerald-200">{{ app.t('dashboard.insight.readyExportDescription') }}</p>
-            </RouterLink>
           </div>
         </AppCard>
       </div>
