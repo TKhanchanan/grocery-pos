@@ -64,8 +64,8 @@ const totalMovements = ref(0)
 const form = reactive({
   product_id: '',
   location_id: '',
-  quantity: 100,
-  total_cost: 200,
+  quantity: 1,
+  total_cost: 0,
   unit_cost: 0,
   note: '',
 })
@@ -151,6 +151,17 @@ function friendlyError(err: unknown, fallback: TranslationKey) {
   const message = err instanceof Error ? err.message : app.t(fallback)
   if (message.toLowerCase().includes('permission')) return app.t('stockOps.noPermission')
   return message
+}
+
+function calculateSuggestedTotalCost() {
+  const quantity = Math.max(0, Number(form.quantity || 0))
+  const unitCost = Math.max(0, Number(selectedProduct.value?.unit_cost || 0))
+  form.total_cost = Number((quantity * unitCost).toFixed(2))
+}
+
+function applySelectedProductCost() {
+  form.unit_cost = Math.max(0, Number(selectedProduct.value?.unit_cost || 0))
+  calculateSuggestedTotalCost()
 }
 
 function syncActiveTabFromRoute() {
@@ -326,6 +337,8 @@ function previousPage() {
 }
 
 watch(() => route.query.tab, syncActiveTabFromRoute)
+watch(() => form.product_id, applySelectedProductCost)
+watch(() => form.quantity, calculateSuggestedTotalCost)
 
 onMounted(async () => {
   syncActiveTabFromRoute()

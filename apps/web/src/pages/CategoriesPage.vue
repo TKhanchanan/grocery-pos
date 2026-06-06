@@ -175,7 +175,6 @@ onMounted(load)
         <AppLoadingState v-if="loading" :label="app.t('categories.loading')" />
         <AppEmptyState v-else-if="filteredCategories.length === 0" :title="app.t('categories.empty')" :description="app.t('categories.description')">
           <template v-if="canCreate && categories.length === 0">
-            <AppButton icon="plus" @click="openCreate">{{ app.t('categories.addFirst') }}</AppButton>
           </template>
         </AppEmptyState>
 

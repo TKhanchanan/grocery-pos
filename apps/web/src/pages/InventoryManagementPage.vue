@@ -502,24 +502,26 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-6">
-    <PageHeader :title="app.t('inventory.title')" :eyebrow="app.t('inventory.eyebrow')" :description="app.t('inventory.description')" icon="map-pin">
-      <template #actions>
-        <AppButton v-if="activeTab === 'locations' && canCreateLocation" icon="plus" @click="openCreateLocation">
-          {{ app.t('inventory.locations.add') }}
-        </AppButton>
-        <AppButton v-else-if="activeTab === 'transfers' && canCreateTransfer" icon="arrow-left-right" @click="openCreateTransfer">
-          {{ app.t('inventory.transfers.add') }}
-        </AppButton>
-      </template>
-    </PageHeader>
+    <PageHeader :title="app.t('inventory.title')" :eyebrow="app.t('inventory.eyebrow')" :description="app.t('inventory.description')" icon="map-pin" />
 
     <AppTabs v-if="tabs.length > 1" :tabs="tabs" :model-value="activeTab" @update:model-value="setActiveTab" />
 
-    <section v-if="activeTab === 'locations'" class="space-y-4">
+    <div v-if="activeTab === 'locations'" class=" grid gap-4">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-xl font-black text-slate-950 dark:text-slate-50">{{ app.t('inventory.tabs.locations') }}</h2>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <AppButton v-if="canCreateLocation" icon="plus" @click="openCreateLocation">
+            {{ app.t('inventory.locations.add') }}
+          </AppButton>
+        </div>
+      </div>
       <AppCard class="dark:bg-slate-900/80">
         <div v-if="locationError" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">{{ locationError }}</div>
         <AppLoadingState v-if="loadingLocations" :label="app.t('inventory.locations.loading')" />
-        <AppEmptyState v-else-if="locations.length === 0" :title="app.t('inventory.locations.empty')" :description="app.t('inventory.locations.emptyDescription')" />
+        <AppEmptyState v-else-if="locations.length === 0" :title="app.t('inventory.locations.empty')" :description="app.t('inventory.locations.emptyDescription')" icon="map-pin">
+        </AppEmptyState>
         <div v-else class="overflow-x-auto">
           <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
             <thead class="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
@@ -558,9 +560,20 @@ onBeforeUnmount(() => {
           </table>
         </div>
       </AppCard>
-    </section>
+    </div>
 
-    <section v-else class="space-y-4">
+    <div v-else class=" grid gap-4">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-xl font-black text-slate-950 dark:text-slate-50">{{ app.t('inventory.tabs.transfers') }}</h2>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <AppButton v-if="canCreateTransfer" icon="arrow-left-right" @click="openCreateTransfer">
+            {{ app.t('inventory.transfers.add') }}
+          </AppButton>
+        </div>
+      </div>
+
       <div class="grid gap-3 md:grid-cols-3">
         <StatCard :label="app.t('inventory.transfer.status.draft')" :value="transferSummary.draft" :helper="app.t('inventory.transfers.draftHelper')" icon="history" />
         <StatCard :label="app.t('inventory.transfer.status.completed')" :value="transferSummary.completed" :helper="app.t('inventory.transfers.completedHelper')" icon="check-circle" tone="success" />
@@ -570,7 +583,8 @@ onBeforeUnmount(() => {
       <AppCard class="dark:bg-slate-900/80">
         <div v-if="transferError" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">{{ transferError }}</div>
         <AppLoadingState v-if="loadingTransfers || loadingOptions" :label="app.t('inventory.transfers.loading')" />
-        <AppEmptyState v-else-if="transfers.length === 0" :title="app.t('inventory.transfers.empty')" :description="app.t('inventory.transfers.emptyDescription')" />
+        <AppEmptyState v-else-if="transfers.length === 0" :title="app.t('inventory.transfers.empty')" :description="app.t('inventory.transfers.emptyDescription')" icon="arrow-left-right">
+        </AppEmptyState>
         <div v-else class="space-y-4">
           <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
@@ -633,7 +647,7 @@ onBeforeUnmount(() => {
         </div>
       </AppCard>
 
-    </section>
+    </div>
 
     <AppModal
       :open="locationModalOpen"

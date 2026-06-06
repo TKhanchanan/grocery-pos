@@ -637,7 +637,6 @@ onBeforeUnmount(() => {
         <AppLoadingState v-if="loading" :label="app.t('products.loading')" />
         <AppEmptyState v-else-if="products.length === 0" :title="app.t('products.none')" :description="app.t('products.emptyDescription')">
           <template v-if="canCreate">
-            <AppButton icon="plus" @click="openCreate">{{ app.t('products.addFirst') }}</AppButton>
           </template>
         </AppEmptyState>
 
