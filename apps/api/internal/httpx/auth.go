@@ -368,6 +368,19 @@ func (s *Server) requireAnyPermission(next http.HandlerFunc, permissions ...stri
 	})
 }
 
+func (s *Server) requireAllPermissions(next http.HandlerFunc, permissions ...string) http.HandlerFunc {
+	return s.auth(func(w http.ResponseWriter, r *http.Request) {
+		user, _ := currentUser(r.Context())
+		for _, permission := range permissions {
+			if !s.userHasPermission(r.Context(), user, permission) {
+				response.ErrorJSON(w, http.StatusForbidden, "FORBIDDEN", "You do not have permission to access this resource.")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func currentUser(ctx context.Context) (User, bool) {
 	user, ok := ctx.Value(userContextKey).(User)
 	return user, ok

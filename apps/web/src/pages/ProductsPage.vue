@@ -98,7 +98,7 @@ const form = reactive<ProductForm>({
 const canCreate = computed(() => auth.hasPermission('products.create'))
 const canUpdate = computed(() => auth.hasPermission('products.update'))
 const canDeactivate = computed(() => auth.hasPermission('products.deactivate'))
-const canImportProducts = computed(() => auth.hasAnyPermission(['imports.view', 'imports.products.preview', 'imports.products.confirm']))
+const canImportProducts = computed(() => auth.hasPermission('products.import'))
 const canDownloadImportTemplate = computed(() => auth.hasPermission('imports.template.download'))
 const canPreviewImport = computed(() => auth.hasPermission('imports.products.preview'))
 const canConfirmImport = computed(() => auth.hasPermission('imports.products.confirm'))
