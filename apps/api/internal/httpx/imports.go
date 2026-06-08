@@ -208,7 +208,8 @@ func blankZero(value string) string {
 }
 
 func (s *Server) createProductImportPreview(ctx context.Context, user User, fileName string, rows []ProductImportRow) (ImportJob, error) {
-	seen := map[string]bool{}
+	seenSKUs := map[string]bool{}
+	seenBarcodes := map[string]bool{}
 	var jobID uint64
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `
@@ -222,7 +223,7 @@ func (s *Server) createProductImportPreview(ctx context.Context, user User, file
 		success, failed := 0, 0
 		for index, row := range rows {
 			status := "PENDING"
-			message := s.validateImportRow(ctx, tx, row, seen)
+			message := s.validateImportRow(ctx, tx, row, seenSKUs, seenBarcodes)
 			if message != "" {
 				status = "FAILED"
 				failed++
@@ -245,16 +246,17 @@ func (s *Server) createProductImportPreview(ctx context.Context, user User, file
 	return s.importJobByID(ctx, jobID, true)
 }
 
-func (s *Server) validateImportRow(ctx context.Context, tx *sql.Tx, row ProductImportRow, seen map[string]bool) string {
+func (s *Server) validateImportRow(ctx context.Context, tx *sql.Tx, row ProductImportRow, seenSKUs, seenBarcodes map[string]bool) string {
 	errors := []string{}
 	sku := strings.TrimSpace(row.SKU)
 	if sku == "" {
 		errors = append(errors, "SKU is required")
 	} else {
-		if seen[strings.ToLower(sku)] {
+		skuKey := strings.ToLower(sku)
+		if seenSKUs[skuKey] {
 			errors = append(errors, "duplicate SKU in file")
 		}
-		seen[strings.ToLower(sku)] = true
+		seenSKUs[skuKey] = true
 		var exists int
 		_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM products WHERE sku=?`, sku).Scan(&exists)
 		if exists > 0 {
@@ -279,9 +281,14 @@ func (s *Server) validateImportRow(ctx context.Context, tx *sql.Tx, row ProductI
 	if row.InitialStock != nil && *row.InitialStock < 0 {
 		errors = append(errors, "Initial stock must be greater than or equal to 0")
 	}
-	if strings.TrimSpace(row.Barcode) != "" {
+	barcode := strings.TrimSpace(row.Barcode)
+	if barcode != "" {
+		if seenBarcodes[barcode] {
+			errors = append(errors, "duplicate barcode in file")
+		}
+		seenBarcodes[barcode] = true
 		var exists int
-		_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM products WHERE barcode=?`, row.Barcode).Scan(&exists)
+		_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM products WHERE barcode=?`, barcode).Scan(&exists)
 		if exists > 0 {
 			errors = append(errors, "barcode already exists")
 		}

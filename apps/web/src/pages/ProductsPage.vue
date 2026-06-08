@@ -938,7 +938,7 @@ onBeforeUnmount(() => {
 
         <div v-if="importError" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ importError }}</div>
 
-        <section v-if="importPreviewJob" class="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-950/50">
+        <section v-if="importPreviewJob" class="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-950/50">
           <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 class="font-black">{{ app.t('products.importPreview') }}: {{ importPreviewJob.file_name }}</h3>
@@ -946,30 +946,39 @@ onBeforeUnmount(() => {
             </div>
             <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-200">{{ importPreviewJob.status }}</span>
           </div>
-          <div class="max-h-[360px] overflow-auto">
-            <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+          <div class="max-h-[360px] max-w-full touch-pan-x overflow-x-auto overflow-y-auto overscroll-x-contain">
+            <table class="w-full min-w-[1040px] table-fixed divide-y divide-slate-200 text-sm dark:divide-slate-800">
+              <colgroup>
+                <col class="w-16" />
+                <col class="w-32" />
+                <col class="w-44" />
+                <col class="w-36" />
+                <col class="w-28" />
+                <col class="w-28" />
+                <col class="w-[360px]" />
+              </colgroup>
               <thead class="bg-slate-50 dark:bg-slate-900">
                 <tr>
-                  <th class="px-3 py-2 text-left">{{ app.t('products.importRow') }}</th>
-                  <th class="px-3 py-2 text-left">{{ app.t('products.sku') }}</th>
-                  <th class="px-3 py-2 text-left">{{ app.t('products.name') }}</th>
-                  <th class="px-3 py-2 text-left">{{ app.t('products.category') }}</th>
-                  <th class="px-3 py-2 text-right">{{ app.t('products.sellingPrice') }}</th>
-                  <th class="px-3 py-2 text-right">{{ app.t('products.importInitialStock') }}</th>
+                  <th class="whitespace-nowrap px-3 py-2 text-left">{{ app.t('products.importRow') }}</th>
+                  <th class="whitespace-nowrap px-3 py-2 text-left">{{ app.t('products.sku') }}</th>
+                  <th class="whitespace-nowrap px-3 py-2 text-left">{{ app.t('products.name') }}</th>
+                  <th class="whitespace-nowrap px-3 py-2 text-left">{{ app.t('products.category') }}</th>
+                  <th class="whitespace-nowrap px-3 py-2 text-right">{{ app.t('products.sellingPrice') }}</th>
+                  <th class="whitespace-nowrap px-3 py-2 text-right">{{ app.t('products.importInitialStock') }}</th>
                   <th class="px-3 py-2 text-left">{{ app.t('products.importStatusError') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                 <tr v-for="row in importPreviewJob.rows" :key="row.id" :class="importRowClass(row)">
-                  <td class="px-3 py-2">{{ row.row_index }}</td>
-                  <td class="px-3 py-2 font-semibold">{{ row.raw_data.sku }}</td>
-                  <td class="px-3 py-2">{{ row.raw_data.name }}</td>
-                  <td class="px-3 py-2">{{ row.raw_data.category || '-' }}</td>
-                  <td class="px-3 py-2 text-right">{{ row.raw_data.selling_price }}</td>
-                  <td class="px-3 py-2 text-right">{{ row.raw_data.initial_stock ?? '-' }}</td>
-                  <td class="px-3 py-2">
+                  <td class="whitespace-nowrap px-3 py-2 align-top">{{ row.row_index }}</td>
+                  <td class="break-words px-3 py-2 align-top font-semibold">{{ row.raw_data.sku }}</td>
+                  <td class="break-words px-3 py-2 align-top">{{ row.raw_data.name }}</td>
+                  <td class="break-words px-3 py-2 align-top">{{ row.raw_data.category || '-' }}</td>
+                  <td class="whitespace-nowrap px-3 py-2 text-right align-top">{{ row.raw_data.selling_price }}</td>
+                  <td class="whitespace-nowrap px-3 py-2 text-right align-top">{{ row.raw_data.initial_stock ?? '-' }}</td>
+                  <td class="break-words px-3 py-2 align-top">
                     <span class="font-bold" :class="row.status === 'FAILED' ? 'text-red-700 dark:text-red-300' : 'text-brand-700 dark:text-emerald-200'">{{ row.status }}</span>
-                    <p v-if="row.error_message" class="mt-1 text-xs text-red-700 dark:text-red-300">{{ row.error_message }}</p>
+                    <p v-if="row.error_message" class="mt-1 text-xs leading-5 text-red-700 dark:text-red-300">{{ row.error_message }}</p>
                   </td>
                 </tr>
               </tbody>
