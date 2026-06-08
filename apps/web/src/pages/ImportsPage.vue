@@ -8,7 +8,7 @@ import AppCard from '../components/AppCard.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import type { ImportJob, ImportJobRow } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 
 const jobs = ref<ImportJob[]>([])
 const previewJob = ref<ImportJob | null>(null)
@@ -175,7 +175,7 @@ onMounted(loadJobs)
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
                   <p class="truncate font-bold">#{{ job.id }} {{ job.file_name }}</p>
-                  <p class="text-xs text-slate-500">{{ formatThaiDateTime(job.created_at) }}</p>
+                  <p class="text-xs text-slate-500">{{ formatAppDateTime(job.created_at, 'en') }}</p>
                 </div>
                 <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">{{ job.status }}</span>
               </div>

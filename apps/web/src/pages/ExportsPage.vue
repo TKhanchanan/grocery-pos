@@ -62,6 +62,11 @@ function exportProfit() {
           date-from-label="Sales date from"
           date-to-label="Sales date to"
           month-label="Month"
+          date-placeholder="Select date"
+          month-placeholder="Select month"
+          today-label="Today"
+          this-month-label="This month"
+          locale="en-US"
           show-month
         />
         <div v-if="error" class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>

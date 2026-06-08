@@ -17,7 +17,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { DashboardSummary, StockReport, StockStatus } from '../types/navigation'
-import { formatThaiDateTime, thaiLocale } from '../utils/date'
+import { appLocale, formatAppDateTime } from '../utils/date'
 
 type Period = '7D' | '30D' | 'MONTH'
 
@@ -115,7 +115,7 @@ function normalizeDateKey(value: string) {
 
 function shortDate(key: string) {
   const [year, month, day] = key.split('-').map(Number)
-  return new Intl.DateTimeFormat(thaiLocale(), { day: '2-digit', month: 'short' }).format(new Date(year, month - 1, day))
+  return new Intl.DateTimeFormat(appLocale(app.language), { day: '2-digit', month: 'short' }).format(new Date(year, month - 1, day))
 }
 
 function trendStartDate(today: Date) {
@@ -460,7 +460,7 @@ onBeforeUnmount(() => {
                 <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brand-100 text-brand-700 dark:bg-emerald-500/20 dark:text-emerald-200"><AppIcon name="receipt-text" /></span>
                 <div class="min-w-0">
                   <p class="truncate font-black">{{ sale.receipt_no }}</p>
-                  <p class="text-sm text-slate-500 dark:text-slate-400">{{ sale.cashier_name }} · {{ formatThaiDateTime(sale.created_at) }}</p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">{{ sale.cashier_name }} · {{ formatAppDateTime(sale.created_at, app.language) }}</p>
                 </div>
               </div>
               <div class="flex items-center justify-between gap-3 sm:block sm:text-right">

@@ -5,7 +5,7 @@ import AppCard from '../components/AppCard.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import type { StockMovement } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 
 const movements = ref<StockMovement[]>([])
 const loading = ref(false)
@@ -54,7 +54,7 @@ onMounted(load)
             </thead>
             <tbody class="divide-y divide-slate-100">
               <tr v-for="movement in movements" :key="movement.id">
-                <td class="px-3 py-2">{{ formatThaiDateTime(movement.created_at) }}</td>
+                <td class="px-3 py-2">{{ formatAppDateTime(movement.created_at, 'en') }}</td>
                 <td class="px-3 py-2"><b>{{ movement.product_name }}</b><br /><span class="text-xs text-slate-500">{{ movement.sku }}</span></td>
                 <td class="px-3 py-2">{{ movement.location_name }}</td>
                 <td class="px-3 py-2">{{ movement.reference_type }}</td>

@@ -6,7 +6,7 @@ import logoUrl from '../assets/logo.png'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { AlertType, InventoryAlert, NavigationItem } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 import AppBadge from '../components/AppBadge.vue'
 import AppDrawer from '../components/AppDrawer.vue'
 import AppIcon from '../components/AppIcon.vue'
@@ -150,7 +150,7 @@ function alertIconClass(type: AlertType) {
 }
 
 function notificationTime(value: string) {
-  return formatThaiDateTime(value)
+  return formatAppDateTime(value, app.language)
 }
 
 async function loadLatestAlerts() {

@@ -19,7 +19,7 @@ import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { IconName } from '../types/icons'
 import type { Location, PaymentSummaryReport, ProductSalesReport, SalesPeriodReport, StockReport, StockStatus } from '../types/navigation'
-import { formatThaiDate, formatThaiNumericDate } from '../utils/date'
+import { formatAppDate, formatAppNumericDate } from '../utils/date'
 
 type ReportKey = 'daily-sales' | 'monthly-sales' | 'best-selling' | 'profit-by-product' | 'stock' | 'inventory-valuation' | 'payment-summary' | 'low-stock' | 'reorder'
 type ReportRow = SalesPeriodReport | ProductSalesReport | StockReport | PaymentSummaryReport
@@ -31,6 +31,7 @@ interface ReportTab {
   labelKey: TranslationKey
   endpoint: string
   icon: IconName
+  permission: string
 }
 
 interface KpiCard {
@@ -47,15 +48,15 @@ const route = useRoute()
 const router = useRouter()
 
 const tabs: ReportTab[] = [
-  { key: 'daily-sales', labelKey: 'reports.tab.dailySales', endpoint: '/v1/reports/daily-sales', icon: 'receipt-text' },
-  { key: 'monthly-sales', labelKey: 'reports.tab.monthlySales', endpoint: '/v1/reports/monthly-sales', icon: 'history' },
-  { key: 'best-selling', labelKey: 'reports.tab.bestSelling', endpoint: '/v1/reports/best-selling', icon: 'package' },
-  { key: 'profit-by-product', labelKey: 'reports.tab.profitByProduct', endpoint: '/v1/reports/profit-by-product', icon: 'banknote' },
-  { key: 'stock', labelKey: 'reports.tab.stock', endpoint: '/v1/reports/stock', icon: 'package' },
-  { key: 'inventory-valuation', labelKey: 'reports.tab.valuation', endpoint: '/v1/reports/inventory-valuation', icon: 'chart-column' },
-  { key: 'payment-summary', labelKey: 'reports.tab.payments', endpoint: '/v1/reports/payment-summary', icon: 'qr-code' },
-  { key: 'low-stock', labelKey: 'reports.tab.lowStock', endpoint: '/v1/reports/low-stock', icon: 'triangle-alert' },
-  { key: 'reorder', labelKey: 'reports.tab.reorder', endpoint: '/v1/reports/reorder', icon: 'clipboard-list' },
+  { key: 'daily-sales', labelKey: 'reports.tab.dailySales', endpoint: '/v1/reports/daily-sales', icon: 'receipt-text', permission: 'reports.daily_sales' },
+  { key: 'monthly-sales', labelKey: 'reports.tab.monthlySales', endpoint: '/v1/reports/monthly-sales', icon: 'history', permission: 'reports.monthly_sales' },
+  { key: 'best-selling', labelKey: 'reports.tab.bestSelling', endpoint: '/v1/reports/best-selling', icon: 'package', permission: 'reports.best_selling' },
+  { key: 'profit-by-product', labelKey: 'reports.tab.profitByProduct', endpoint: '/v1/reports/profit-by-product', icon: 'banknote', permission: 'reports.profit' },
+  { key: 'stock', labelKey: 'reports.tab.stock', endpoint: '/v1/reports/stock', icon: 'package', permission: 'reports.stock' },
+  { key: 'inventory-valuation', labelKey: 'reports.tab.valuation', endpoint: '/v1/reports/inventory-valuation', icon: 'chart-column', permission: 'reports.inventory_valuation' },
+  { key: 'payment-summary', labelKey: 'reports.tab.payments', endpoint: '/v1/reports/payment-summary', icon: 'qr-code', permission: 'reports.payment_summary' },
+  { key: 'low-stock', labelKey: 'reports.tab.lowStock', endpoint: '/v1/reports/low-stock', icon: 'triangle-alert', permission: 'reports.low_stock' },
+  { key: 'reorder', labelKey: 'reports.tab.reorder', endpoint: '/v1/reports/reorder', icon: 'clipboard-list', permission: 'reports.reorder' },
 ]
 
 const reportTabKeys = tabs.map((tab) => tab.key)
@@ -75,7 +76,10 @@ const filters = reactive({
   location_id: '',
 })
 
-const active = computed(() => tabs.find((tab) => tab.key === activeTab.value) ?? tabs[0])
+const visibleTabs = computed(() => tabs.filter((tab) => auth.hasPermission(tab.permission)))
+const active = computed(() => visibleTabs.value.find((tab) => tab.key === activeTab.value) ?? visibleTabs.value[0] ?? null)
+const hasVisibleReports = computed(() => visibleTabs.value.length > 0)
+const canViewLocations = computed(() => auth.hasPermission('locations.view'))
 const isStockReport = computed(() => ['stock', 'inventory-valuation', 'low-stock', 'reorder'].includes(activeTab.value))
 const isProductReport = computed(() => ['best-selling', 'profit-by-product'].includes(activeTab.value))
 const isPeriodReport = computed(() => ['daily-sales', 'monthly-sales'].includes(activeTab.value))
@@ -197,10 +201,10 @@ function formatPeriod(value: string) {
   const text = String(value).trim()
   if (activeTab.value === 'monthly-sales') {
     const monthMatch = text.match(/^(\d{4})[-/](\d{1,2})$/)
-    if (monthMatch) return formatThaiDate(`${monthMatch[1]}-${monthMatch[2].padStart(2, '0')}-01T00:00:00`)
+    if (monthMatch) return formatAppDate(`${monthMatch[1]}-${monthMatch[2].padStart(2, '0')}-01T00:00:00`, app.language)
   }
   const normalized = /^\d{4}-\d{1,2}-\d{1,2}$/.test(text) ? `${text}T00:00:00` : text
-  const formatted = formatThaiDate(normalized)
+  const formatted = formatAppDate(normalized, app.language)
   return formatted === normalized ? text : formatted
 }
 
@@ -209,10 +213,10 @@ function formatExportPeriod(value: string) {
   const text = String(value).trim()
   if (activeTab.value === 'monthly-sales') {
     const monthMatch = text.match(/^(\d{4})[-/](\d{1,2})$/)
-    if (monthMatch) return formatThaiNumericDate(`${monthMatch[1]}-${monthMatch[2].padStart(2, '0')}-01T00:00:00`)
+    if (monthMatch) return formatAppNumericDate(`${monthMatch[1]}-${monthMatch[2].padStart(2, '0')}-01T00:00:00`, app.language)
   }
   const normalized = /^\d{4}-\d{1,2}-\d{1,2}$/.test(text) ? `${text}T00:00:00` : text
-  const formatted = formatThaiNumericDate(normalized)
+  const formatted = formatAppNumericDate(normalized, app.language)
   return formatted === normalized ? text : formatted
 }
 
@@ -244,16 +248,21 @@ function suggestedAction(row: StockReport) {
 function buildQuery() {
   const params = new URLSearchParams()
   if (!isStockReport.value) {
-    if (filters.date_from) params.set('date_from', filters.date_from)
-    if (filters.date_to) params.set('date_to', filters.date_to)
-    if (filters.month) params.set('month', filters.month)
+    if (filters.month) {
+      params.set('month', filters.month)
+    } else {
+      if (filters.date_from) params.set('date_from', filters.date_from)
+      if (filters.date_to) params.set('date_to', filters.date_to)
+    }
   }
-  if (filters.location_id) params.set('location_id', filters.location_id)
+  if (canViewLocations.value && filters.location_id) params.set('location_id', filters.location_id)
   return params.toString()
 }
 
-function routeTab(value: unknown): ReportKey {
-  return typeof value === 'string' && reportTabKeys.includes(value as ReportKey) ? value as ReportKey : 'daily-sales'
+function routeTab(value: unknown): ReportKey | null {
+  const requested = typeof value === 'string' && reportTabKeys.includes(value as ReportKey) ? value as ReportKey : ''
+  if (requested && visibleTabs.value.some((tab) => tab.key === requested)) return requested
+  return visibleTabs.value[0]?.key ?? null
 }
 
 function resetReportFilters() {
@@ -266,6 +275,11 @@ function resetReportFilters() {
 
 function syncTabFromRoute() {
   const nextTab = routeTab(route.query.tab)
+  if (!nextTab) {
+    rows.value = []
+    error.value = app.t('reports.noPermission')
+    return
+  }
   if (activeTab.value === nextTab) return
   activeTab.value = nextTab
   resetReportFilters()
@@ -273,11 +287,17 @@ function syncTabFromRoute() {
 }
 
 async function loadReport() {
+  const currentReport = active.value
+  if (!currentReport) {
+    rows.value = []
+    error.value = app.t('reports.noPermission')
+    return
+  }
   loading.value = true
   error.value = ''
   try {
     const query = buildQuery()
-    rows.value = await apiClient<ReportRow[]>(`${active.value.endpoint}${query ? `?${query}` : ''}`)
+    rows.value = await apiClient<ReportRow[]>(`${currentReport.endpoint}${query ? `?${query}` : ''}`)
     page.value = 1
   } catch (err) {
     error.value = err instanceof Error ? err.message : app.t('reports.loadFailed')
@@ -418,10 +438,12 @@ async function exportExcel() {
 }
 
 async function loadLocations() {
+  if (!canViewLocations.value) return
   locations.value = await apiClient<Location[]>('/v1/locations')
 }
 
 function setTab(key: ReportKey) {
+  if (!visibleTabs.value.some((tab) => tab.key === key)) return
   if (activeTab.value === key) return
   activeTab.value = key
   resetReportFilters()
@@ -453,7 +475,13 @@ function nextPage() {
 watch(() => route.query.tab, syncTabFromRoute)
 
 onMounted(async () => {
-  activeTab.value = routeTab(route.query.tab)
+  const initialTab = routeTab(route.query.tab)
+  if (!initialTab) {
+    rows.value = []
+    error.value = app.t('reports.noPermission')
+    return
+  }
+  activeTab.value = initialTab
   await loadLocations()
   await loadReport()
 })
@@ -464,8 +492,8 @@ onMounted(async () => {
     <PageHeader :title="app.t('reports.title')" :eyebrow="app.t('reports.eyebrow')" :description="app.t('reports.description')" icon="chart-column" />
 
     <div class="grid gap-4">
-      <div class="flex gap-2 overflow-x-auto pb-1">
-        <button v-for="tab in tabs" :key="tab.key"
+      <div v-if="hasVisibleReports" class="flex gap-2 overflow-x-auto pb-1">
+        <button v-for="tab in visibleTabs" :key="tab.key"
           class="focus-ring inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition"
           :class="activeTab === tab.key ? 'bg-brand-600 text-white shadow-sm dark:bg-teal-300 dark:text-slate-950' : 'bg-white/80 text-slate-600 hover:bg-brand-50 dark:bg-slate-950/80 dark:text-slate-300 dark:hover:bg-teal-400/10'"
           @click="setTab(tab.key)">
@@ -474,15 +502,15 @@ onMounted(async () => {
         </button>
       </div>
 
-      <AppCard class="dark:bg-slate-900/80">
+      <AppCard v-if="hasVisibleReports" class="dark:bg-slate-900/80">
         <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('reports.filters') }}</p>
-            <h2 class="text-lg font-black text-slate-950 dark:text-slate-50">{{ app.t(active.labelKey) }}</h2>
+            <h2 class="text-lg font-black text-slate-950 dark:text-slate-50">{{ active ? app.t(active.labelKey) : app.t('reports.title') }}</h2>
           </div>
           <!-- <AppBadge tone="info">{{ app.t('reports.reportCenter') }}</AppBadge> -->
         </div>
-        <div class="grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(220px,1fr)_auto]">
+        <div class="grid gap-3" :class="canViewLocations ? 'xl:grid-cols-[minmax(0,3fr)_minmax(220px,1fr)_auto]' : 'xl:grid-cols-[minmax(0,3fr)_auto]'">
           <AppDateRangeFilter
             v-model:date-from="filters.date_from"
             v-model:date-to="filters.date_to"
@@ -490,10 +518,15 @@ onMounted(async () => {
             :date-from-label="app.t('reports.dateFrom')"
             :date-to-label="app.t('reports.dateTo')"
             :month-label="app.t('reports.month')"
+            :date-placeholder="app.t('reports.selectDate')"
+            :month-placeholder="app.t('reports.selectMonth')"
+            :today-label="app.t('reports.today')"
+            :this-month-label="app.t('reports.thisMonth')"
+            :locale="app.language === 'th' ? 'th-TH-u-ca-buddhist' : 'en-US'"
             :disabled="isStockReport"
             show-month
           />
-          <AppSelect v-model="filters.location_id" :label="app.t('reports.location')">
+          <AppSelect v-if="canViewLocations" v-model="filters.location_id" :label="app.t('reports.location')">
             <option value="">{{ app.t('reports.allLocations') }}</option>
             <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
           </AppSelect>
@@ -504,23 +537,23 @@ onMounted(async () => {
         </div>
       </AppCard>
 
-      <div class="grid gap-3 md:grid-cols-2" :class="kpiCards.length === 3 ? 'xl:grid-cols-3' : 'xl:grid-cols-4'">
+      <div v-if="hasVisibleReports" class="grid gap-3 md:grid-cols-2" :class="kpiCards.length === 3 ? 'xl:grid-cols-3' : 'xl:grid-cols-4'">
         <StatCard v-for="card in kpiCards" :key="card.label" :label="card.label" :value="card.value" :helper="card.helper" :icon="card.icon" :tone="card.tone" />
       </div>
 
       <div v-if="error" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span>{{ error }}</span>
-          <AppButton variant="secondary" @click="loadReport">{{ app.t('reports.retry') }}</AppButton>
+          <AppButton v-if="hasVisibleReports" variant="secondary" @click="loadReport">{{ app.t('reports.retry') }}</AppButton>
         </div>
       </div>
-      <AppLoadingState v-if="loading" :label="app.t('reports.loading')" />
-      <AppEmptyState v-else-if="rows.length === 0" :title="app.t('reports.empty')" :description="app.t('reports.emptyDescription')" icon="chart-column" />
+      <AppLoadingState v-if="hasVisibleReports && loading" :label="app.t('reports.loading')" />
+      <AppEmptyState v-else-if="hasVisibleReports && rows.length === 0" :title="app.t('reports.empty')" :description="app.t('reports.emptyDescription')" icon="chart-column" />
 
-      <AppCard v-else class="dark:bg-slate-900/80">
+      <AppCard v-else-if="hasVisibleReports" class="dark:bg-slate-900/80">
         <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 class="text-lg font-black text-slate-950 dark:text-slate-50">{{ app.t(active.labelKey) }}</h2>
+            <h2 class="text-lg font-black text-slate-950 dark:text-slate-50">{{ active ? app.t(active.labelKey) : app.t('reports.title') }}</h2>
           </div>
           <div class="flex flex-wrap items-center gap-2 sm:justify-end">
             <AppBadge tone="neutral">{{ rows.length.toLocaleString(locale) }} {{ app.t('reports.rows') }}</AppBadge>

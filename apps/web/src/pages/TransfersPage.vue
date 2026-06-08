@@ -9,7 +9,7 @@ import AppSelect from '../components/AppSelect.vue'
 import AppTextarea from '../components/AppTextarea.vue'
 import PageHeader from '../components/PageHeader.vue'
 import type { Location, Product, ProductStock, StockTransfer } from '../types/navigation'
-import { formatThaiDate } from '../utils/date'
+import { formatAppDate } from '../utils/date'
 
 const transfers = ref<StockTransfer[]>([])
 const products = ref<Product[]>([])
@@ -186,7 +186,7 @@ onMounted(load)
           <p class="mt-1 text-sm text-slate-500">{{ selectedTransfer.from_location_name }} → {{ selectedTransfer.to_location_name }}</p>
           <div class="mt-4 grid gap-3 sm:grid-cols-3">
             <div class="rounded-lg border border-slate-200 p-3"><p class="text-sm text-slate-500">Status</p><p class="font-bold">{{ selectedTransfer.status }}</p></div>
-            <div class="rounded-lg border border-slate-200 p-3"><p class="text-sm text-slate-500">Created</p><p class="font-bold">{{ formatThaiDate(selectedTransfer.created_at) }}</p></div>
+            <div class="rounded-lg border border-slate-200 p-3"><p class="text-sm text-slate-500">Created</p><p class="font-bold">{{ formatAppDate(selectedTransfer.created_at, 'en') }}</p></div>
             <div class="rounded-lg border border-slate-200 p-3"><p class="text-sm text-slate-500">Items</p><p class="font-bold">{{ selectedTransfer.items.length }}</p></div>
           </div>
           <ul class="mt-4 grid gap-2 text-sm">

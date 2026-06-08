@@ -18,7 +18,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { Location, Receipt } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 
 const app = useAppStore()
 const auth = useAuthStore()
@@ -73,7 +73,7 @@ function moneyWithCurrency(value: number) {
 }
 
 function formatDate(value: string) {
-  return formatThaiDateTime(value)
+  return formatAppDateTime(value, app.language)
 }
 
 function statusClass(status: Receipt['status']) {
@@ -177,6 +177,11 @@ onMounted(async () => {
           <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_240px] xl:items-end">
             <AppDateRangeFilter v-model:date-from="filters.date_from" v-model:date-to="filters.date_to"
               :date-from-label="app.t('sales.dateFrom')" :date-to-label="app.t('sales.dateTo')"
+              :date-placeholder="app.t('reports.selectDate')"
+              :month-placeholder="app.t('reports.selectMonth')"
+              :today-label="app.t('reports.today')"
+              :this-month-label="app.t('reports.thisMonth')"
+              :locale="app.language === 'th' ? 'th-TH-u-ca-buddhist' : 'en-US'"
               :show-shortcuts="false" />
 
             <div class="grid grid-cols-2 gap-2 xl:w-64">

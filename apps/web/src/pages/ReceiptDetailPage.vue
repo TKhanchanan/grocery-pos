@@ -7,7 +7,7 @@ import AppEmptyState from '../components/AppEmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { useAppStore } from '../stores/app'
 import type { Receipt } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 import { prepareReceiptPrintArea, resetReceiptPrintArea } from '../utils/print'
 import { defaultReceiptSettings, loadReceiptSettings } from '../utils/receiptSettings'
 
@@ -35,7 +35,7 @@ function money(value: number) {
 }
 
 function formatDate(value: string | null) {
-  return formatThaiDateTime(value)
+  return formatAppDateTime(value, app.language)
 }
 
 function paymentLabel(method: string) {

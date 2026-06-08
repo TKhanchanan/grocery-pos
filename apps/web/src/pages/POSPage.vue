@@ -19,7 +19,7 @@ import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import { useCartStore } from '../stores/cart'
 import type { Category, Location, POSProduct, POSProductPage, Receipt, StockStatus } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 import { prepareReceiptPrintArea, resetReceiptPrintArea } from '../utils/print'
 import { defaultReceiptSettings, loadReceiptSettings } from '../utils/receiptSettings'
 
@@ -56,7 +56,7 @@ const receiptPath = computed(() => successReceipt.value ? `/sales/${successRecei
 const scannerMessage = computed(() => app.t(scannerMessageKey.value))
 const productCountLabel = computed(() => t('pos.productsCount', { count: productTotal.value }))
 const productPageLabel = computed(() => t('pos.page', { page: productPage.value, total: productTotalPages.value }))
-const receiptPreviewDate = computed(() => saleConfirmOpen.value ? formatThaiDateTime(new Date()) : '-')
+const receiptPreviewDate = computed(() => saleConfirmOpen.value ? formatAppDateTime(new Date(), app.language) : '-')
 const receiptShopName = computed(() => receiptSettings.value.shop_name.trim() || defaultReceiptSettings.shop_name)
 const receiptShopPhone = computed(() => receiptSettings.value.shop_phone.trim())
 const receiptShopAddress = computed(() => receiptSettings.value.shop_address.trim())

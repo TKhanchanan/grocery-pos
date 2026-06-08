@@ -5,7 +5,7 @@ import { apiClient } from '../api/client'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { User } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 import AppAvatar from './AppAvatar.vue'
 import AppButton from './AppButton.vue'
 import AppImageCropper from './AppImageCropper.vue'
@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="rounded-xl bg-slate-50/80 p-3 dark:bg-slate-950/60 sm:col-span-2">
             <dt class="text-slate-500 dark:text-slate-400">Avatar updated</dt>
-            <dd class="font-bold">{{ formatThaiDateTime(auth.user?.avatar_updated_at) }}</dd>
+            <dd class="font-bold">{{ formatAppDateTime(auth.user?.avatar_updated_at, app.language) }}</dd>
           </div>
         </dl>
 

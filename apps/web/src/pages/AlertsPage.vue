@@ -15,7 +15,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { AlertType, InventoryAlert, Location } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 
 type AlertFilter = 'all' | 'unread' | AlertType
 
@@ -116,7 +116,7 @@ function relativeDate(value: string) {
   const day = date.toDateString()
   if (day === today.toDateString()) return `${app.t('alerts.today')} ${date.toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })}`
   if (day === yesterday.toDateString()) return `${app.t('alerts.yesterday')} ${date.toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })}`
-  return formatThaiDateTime(value)
+  return formatAppDateTime(value, app.language)
 }
 
 async function loadAlerts() {

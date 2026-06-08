@@ -15,7 +15,7 @@ import PageHeader from '../components/PageHeader.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import type { AppSettings, LineSettings, Location, NotificationLog } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 
 type SettingsTab = 'shop' | 'receipt' | 'line' | 'accessibility' | 'system'
 
@@ -373,7 +373,7 @@ onMounted(() => {
                 <td class="px-3 py-2">{{ log.recipient || '-' }}</td>
                 <td class="px-3 py-2"><span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(log.status)">{{ log.status }}</span></td>
                 <td class="max-w-xs truncate px-3 py-2 text-slate-500 dark:text-slate-400">{{ log.error_message || '-' }}</td>
-                <td class="px-3 py-2 text-slate-500 dark:text-slate-400">{{ formatThaiDateTime(log.created_at) }}</td>
+                <td class="px-3 py-2 text-slate-500 dark:text-slate-400">{{ formatAppDateTime(log.created_at, app.language) }}</td>
               </tr>
             </tbody>
           </table>
@@ -388,7 +388,7 @@ onMounted(() => {
               <span class="rounded-full px-2 py-1 text-xs font-bold" :class="statusClass(log.status)">{{ log.status }}</span>
             </div>
             <p v-if="log.error_message" class="mt-2 text-sm text-red-700">{{ log.error_message }}</p>
-            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{ formatThaiDateTime(log.created_at) }}</p>
+            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{ formatAppDateTime(log.created_at, app.language) }}</p>
           </article>
         </div>
       </AppCard>

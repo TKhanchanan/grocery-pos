@@ -21,7 +21,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { Location, Product, PurchaseOrder, PurchaseOrderItem, Supplier } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 
 type ProcurementTab = 'purchase-orders' | 'suppliers'
 type POAction = 'send' | 'receive' | 'cancel'
@@ -129,7 +129,7 @@ function money(value: number) {
 }
 
 function formatDate(value: string | null) {
-  return formatThaiDateTime(value)
+  return formatAppDateTime(value, app.language)
 }
 
 function friendlyError(err: unknown, fallback: TranslationKey) {

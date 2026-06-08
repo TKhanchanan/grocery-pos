@@ -20,7 +20,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { Location, Product, ProductStock, StockMovement } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 
 type StockTab = 'restock' | 'movements'
 
@@ -441,7 +441,7 @@ onMounted(async () => {
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                 <tr v-for="movement in movements" :key="movement.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
-                  <td class="px-3 py-3">{{ formatThaiDateTime(movement.created_at) }}</td>
+                  <td class="px-3 py-3">{{ formatAppDateTime(movement.created_at, app.language) }}</td>
                   <td class="px-3 py-3">
                     <div class="flex min-w-0 items-center gap-3">
                       <ProductAvatar :src="movementImageURL(movement)" :updated-at="movementImageUpdatedAt(movement)" :name="movement.product_name" size="sm" shape="square" />
@@ -474,7 +474,7 @@ onMounted(async () => {
                 </div>
                 <span class="font-black" :class="movement.quantity_change < 0 ? 'text-red-600 dark:text-red-300' : 'text-brand-700 dark:text-emerald-200'">{{ signed(movement.quantity_change) }}</span>
               </div>
-              <div class="mt-3 flex flex-wrap gap-2"><AppBadge :tone="movementTone(movement.reference_type)">{{ movementLabel(movement.reference_type) }}</AppBadge><span class="text-xs text-slate-500 dark:text-slate-400">{{ formatThaiDateTime(movement.created_at) }}</span></div>
+              <div class="mt-3 flex flex-wrap gap-2"><AppBadge :tone="movementTone(movement.reference_type)">{{ movementLabel(movement.reference_type) }}</AppBadge><span class="text-xs text-slate-500 dark:text-slate-400">{{ formatAppDateTime(movement.created_at, app.language) }}</span></div>
               <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
                 <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.before') }}</dt><dd class="font-semibold">{{ movement.before_stock }}</dd></div>
                 <div><dt class="text-slate-500 dark:text-slate-400">{{ app.t('stockOps.after') }}</dt><dd class="font-semibold">{{ movement.after_stock }}</dd></div>

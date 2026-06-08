@@ -21,7 +21,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import type { Location, Product, ProductStock, StockTransfer } from '../types/navigation'
-import { formatThaiDateTime } from '../utils/date'
+import { formatAppDateTime } from '../utils/date'
 
 type InventoryTab = 'locations' | 'transfers'
 type TransferAction = 'complete' | 'cancel'
@@ -142,7 +142,7 @@ function friendlyError(err: unknown, fallback: TranslationKey) {
 }
 
 function formatDate(value: string | null) {
-  return formatThaiDateTime(value)
+  return formatAppDateTime(value, app.language)
 }
 
 function stockAt(productID: number, locationID: number) {

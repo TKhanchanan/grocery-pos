@@ -11,11 +11,21 @@ const props = withDefaults(defineProps<{
   dateFromLabel: string
   dateToLabel: string
   monthLabel?: string
+  datePlaceholder?: string
+  monthPlaceholder?: string
+  todayLabel?: string
+  thisMonthLabel?: string
+  locale?: string
   disabled?: boolean
   showMonth?: boolean
   showShortcuts?: boolean
 }>(), {
   month: '',
+  datePlaceholder: 'เลือกวันที่',
+  monthPlaceholder: 'เลือกเดือน',
+  todayLabel: 'วันนี้',
+  thisMonthLabel: 'เดือนนี้',
+  locale: 'th-TH-u-ca-buddhist',
   disabled: false,
   showMonth: false,
   showShortcuts: true,
@@ -34,8 +44,14 @@ const today = new Date()
 const viewYear = ref(today.getFullYear())
 const viewMonth = ref(today.getMonth())
 
-const monthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
-const dayNames = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
+const monthNames = computed(() => {
+  const formatter = new Intl.DateTimeFormat(props.locale, { month: 'short' })
+  return Array.from({ length: 12 }, (_, index) => formatter.format(new Date(2024, index, 1)))
+})
+const dayNames = computed(() => {
+  const formatter = new Intl.DateTimeFormat(props.locale, { weekday: 'short' })
+  return Array.from({ length: 7 }, (_, index) => formatter.format(new Date(2024, 0, index + 7)))
+})
 
 const rootClass = computed(() => {
   if (props.showMonth && props.showShortcuts) {
@@ -53,8 +69,8 @@ const rootClass = computed(() => {
   return 'grid w-full gap-3 md:grid-cols-2'
 })
 
-const calendarTitle = computed(() => `${monthNames[viewMonth.value]} ${viewYear.value + 543}`)
-const monthTitle = computed(() => String(viewYear.value + 543))
+const calendarTitle = computed(() => new Intl.DateTimeFormat(props.locale, { month: 'short', year: 'numeric' }).format(new Date(viewYear.value, viewMonth.value, 1)))
+const monthTitle = computed(() => new Intl.DateTimeFormat(props.locale, { year: 'numeric' }).format(new Date(viewYear.value, 0, 1)))
 const calendarDays = computed(() => {
   const firstDay = new Date(viewYear.value, viewMonth.value, 1)
   const start = new Date(firstDay)
@@ -117,32 +133,30 @@ function monthKey() {
 }
 
 function formatDate(value: string) {
-  if (!value) return 'เลือกวันที่'
+  if (!value) return props.datePlaceholder
   const date = new Date(`${value}T00:00:00`)
   if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('th-TH-u-ca-buddhist', { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
+  return new Intl.DateTimeFormat(props.locale, { day: '2-digit', month: 'short', year: 'numeric' }).format(date)
 }
 
 function formatMonth(value: string) {
-  if (!value) return 'เลือกเดือน'
+  if (!value) return props.monthPlaceholder
   const date = new Date(`${value}-01T00:00:00`)
   if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('th-TH-u-ca-buddhist', { month: 'long', year: 'numeric' }).format(date)
+  return new Intl.DateTimeFormat(props.locale, { month: 'long', year: 'numeric' }).format(date)
 }
 
 function setToday() {
   const value = todayKey()
   emit('update:dateFrom', value)
   emit('update:dateTo', value)
+  emit('update:month', '')
   setOpenPicker('')
 }
 
 function setThisMonth() {
-  const date = new Date()
-  const firstDay = new Date(date.getFullYear(), date.getMonth(), 1)
-  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0)
-  emit('update:dateFrom', dateKey(firstDay))
-  emit('update:dateTo', dateKey(lastDay))
+  emit('update:dateFrom', '')
+  emit('update:dateTo', '')
   emit('update:month', monthKey())
   setOpenPicker('')
 }
@@ -159,13 +173,33 @@ function nextMonth() {
   viewMonth.value = date.getMonth()
 }
 
+function isDateDisabled(value: string) {
+  if (openPicker.value === 'from' && props.dateTo) return value > props.dateTo
+  if (openPicker.value === 'to' && props.dateFrom) return value < props.dateFrom
+  return false
+}
+
+function calendarDayClass(value: string, selected: string, muted: boolean, isToday: boolean) {
+  const unavailable = isDateDisabled(value)
+  return [
+    value === selected ? 'bg-brand-600 text-white dark:bg-teal-300 dark:text-slate-950' : 'hover:bg-slate-100 dark:hover:bg-slate-800',
+    muted ? 'text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-100',
+    isToday && value !== selected ? 'text-brand-700 dark:text-teal-200' : '',
+    unavailable ? 'cursor-not-allowed opacity-35 hover:bg-transparent dark:hover:bg-transparent' : '',
+  ]
+}
+
 function selectDate(value: string) {
+  if (isDateDisabled(value)) return
   if (openPicker.value === 'from') emit('update:dateFrom', value)
   if (openPicker.value === 'to') emit('update:dateTo', value)
+  emit('update:month', '')
   setOpenPicker('')
 }
 
 function selectMonth(monthIndex: number) {
+  emit('update:dateFrom', '')
+  emit('update:dateTo', '')
   emit('update:month', `${viewYear.value}-${String(monthIndex + 1).padStart(2, '0')}`)
   setOpenPicker('')
 }
@@ -196,7 +230,7 @@ function fieldClass(active: boolean) {
           <span v-for="day in dayNames" :key="day" class="py-1">{{ day }}</span>
         </div>
         <div class="mt-1 grid grid-cols-7 gap-1">
-          <button v-for="day in calendarDays" :key="day.key" type="button" class="grid h-9 place-items-center rounded-lg text-sm font-bold transition" :class="[day.key === dateFrom ? 'bg-brand-600 text-white dark:bg-teal-300 dark:text-slate-950' : 'hover:bg-slate-100 dark:hover:bg-slate-800', day.muted ? 'text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-100', day.today && day.key !== dateFrom ? 'text-brand-700 dark:text-teal-200' : '']" @click="selectDate(day.key)">
+          <button v-for="day in calendarDays" :key="day.key" type="button" class="grid h-9 place-items-center rounded-lg text-sm font-bold transition disabled:pointer-events-none" :class="calendarDayClass(day.key, dateFrom, day.muted, day.today)" :disabled="isDateDisabled(day.key)" @click="selectDate(day.key)">
             {{ day.label }}
           </button>
         </div>
@@ -219,7 +253,7 @@ function fieldClass(active: boolean) {
           <span v-for="day in dayNames" :key="day" class="py-1">{{ day }}</span>
         </div>
         <div class="mt-1 grid grid-cols-7 gap-1">
-          <button v-for="day in calendarDays" :key="day.key" type="button" class="grid h-9 place-items-center rounded-lg text-sm font-bold transition" :class="[day.key === dateTo ? 'bg-brand-600 text-white dark:bg-teal-300 dark:text-slate-950' : 'hover:bg-slate-100 dark:hover:bg-slate-800', day.muted ? 'text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-100', day.today && day.key !== dateTo ? 'text-brand-700 dark:text-teal-200' : '']" @click="selectDate(day.key)">
+          <button v-for="day in calendarDays" :key="day.key" type="button" class="grid h-9 place-items-center rounded-lg text-sm font-bold transition disabled:pointer-events-none" :class="calendarDayClass(day.key, dateTo, day.muted, day.today)" :disabled="isDateDisabled(day.key)" @click="selectDate(day.key)">
             {{ day.label }}
           </button>
         </div>
@@ -229,9 +263,8 @@ function fieldClass(active: boolean) {
     <div v-if="showMonth" class="relative grid min-w-0 gap-1.5 text-sm">
       <span class="font-semibold text-slate-700 dark:text-slate-200">{{ monthLabel }}</span>
       <button type="button" :class="fieldClass(openPicker === 'month')" :disabled="disabled" @click="setOpenPicker(openPicker === 'month' ? '' : 'month')">
-        <div v-if="showShortcuts" class="flex items-end gap-2">
-          <AppIcon name="calendar" :size="17" />
-        </div>
+        <span class="min-w-0 truncate">{{ formatMonth(month) }}</span>
+        <AppIcon name="calendar" :size="17" class="shrink-0" />
       </button>
       <div v-if="openPicker === 'month'" class="absolute left-0 top-full z-[110] mt-2 w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-white p-3 shadow-2xl shadow-slate-950/20 dark:bg-slate-900 dark:shadow-black/35">
         <div class="flex items-center justify-between gap-2">
@@ -251,13 +284,13 @@ function fieldClass(active: boolean) {
       <button type="button"
         class="min-h-11 rounded-xl bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
         :disabled="disabled" @click="setToday">
-        วันนี้
+        {{ todayLabel }}
       </button>
 
       <button v-if="showMonth" type="button"
         class="min-h-11 rounded-xl bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
         :disabled="disabled" @click="setThisMonth">
-        เดือนนี้
+        {{ thisMonthLabel }}
       </button>
     </div>
   </div>
