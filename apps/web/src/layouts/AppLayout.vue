@@ -417,7 +417,7 @@ watch(() => route.path, () => {
           </div>
         </div>
       </header>
-      <main class="px-4 py-7 lg:px-8">
+      <main class="min-w-0 max-w-full overflow-x-hidden px-4 py-7 lg:px-8">
         <RouterView />
       </main>
     </div>

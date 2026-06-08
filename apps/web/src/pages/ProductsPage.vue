@@ -10,6 +10,7 @@ import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import AppModal from '../components/AppModal.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import AppSelect from '../components/AppSelect.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -54,6 +55,8 @@ const imageSaving = ref(false)
 const error = ref('')
 const modalOpen = ref(false)
 const saveConfirmOpen = ref(false)
+const statusTarget = ref<Product | null>(null)
+const statusSaving = ref(false)
 const importModalOpen = ref(false)
 const stockTooltipProductID = ref<number | null>(null)
 const stockTooltipLoading = ref(false)
@@ -74,6 +77,8 @@ const selectedImportFile = ref<File | null>(null)
 const importUploading = ref(false)
 const importConfirming = ref(false)
 const importError = ref('')
+const page = ref(1)
+const pageSize = ref(10)
 const fieldErrors = reactive({ sku: '', name: '' })
 const filters = reactive({ q: '', category_id: '', status: '', stock_status: '' })
 const form = reactive<ProductForm>({
@@ -105,9 +110,19 @@ const invalidImportRows = computed(() => importPreviewJob.value?.rows?.filter((r
 const modalTitle = computed(() => form.id ? app.t('products.edit') : app.t('products.add'))
 const saveConfirmTitle = computed(() => form.id ? app.t('products.confirmUpdateTitle') : app.t('products.confirmCreateTitle'))
 const saveConfirmMessage = computed(() => t('products.confirmSaveMessage', { name: form.name.trim() || app.t('products.name') }))
+const statusNextActive = computed(() => statusTarget.value ? !statusTarget.value.is_active : false)
+const statusConfirmTitle = computed(() => app.t(statusNextActive.value ? 'products.confirmActivateTitle' : 'products.confirmDeactivateTitle'))
+const statusConfirmMessage = computed(() => statusTarget.value
+  ? t(statusNextActive.value ? 'products.confirmActivateMessage' : 'products.confirmDeactivateMessage', { name: statusTarget.value.name })
+  : '')
 const currentImage = computed(() => imagePreviewUrl.value || selectedProduct.value?.image_url || '')
 const currentImageUpdatedAt = computed(() => imagePreviewUrl.value ? '' : selectedProduct.value?.image_updated_at ?? '')
 const cameraMessage = computed(() => app.t(cameraMessageKey.value))
+const totalPages = computed(() => Math.max(1, Math.ceil(products.value.length / pageSize.value)))
+const visibleProducts = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return products.value.slice(start, start + pageSize.value)
+})
 const stockTooltipStyle = computed(() => ({
   top: `${stockTooltipPosition.top}px`,
   left: `${stockTooltipPosition.left}px`,
@@ -175,11 +190,30 @@ async function load() {
     ])
     products.value = productRows
     categories.value = categoryRows
+    page.value = Math.min(page.value, totalPages.value)
   } catch (err) {
     error.value = err instanceof Error ? err.message : app.t('products.notFound')
   } finally {
     loading.value = false
   }
+}
+
+function applyFilters() {
+  page.value = 1
+  load()
+}
+
+function changePageSize(value: number) {
+  pageSize.value = value
+  page.value = 1
+}
+
+function previousPage() {
+  if (page.value > 1) page.value -= 1
+}
+
+function nextPage() {
+  if (page.value < totalPages.value) page.value += 1
 }
 
 function revokePreview() {
@@ -515,13 +549,34 @@ async function save() {
   }
 }
 
-async function setActive(product: Product, active: boolean) {
+function openStatusConfirm(product: Product) {
+  statusTarget.value = product
+}
+
+function closeStatusConfirm() {
+  if (statusSaving.value) return
+  statusTarget.value = null
+}
+
+async function confirmStatusChange() {
+  if (!statusTarget.value) return
+  const product = statusTarget.value
+  const active = !product.is_active
+  statusSaving.value = true
   try {
     await patchJSON<Product>(`/v1/products/${product.id}/status`, { is_active: active })
     await load()
+    statusTarget.value = null
+    app.pushToast({
+      type: 'success',
+      message: app.t(active ? 'products.activated' : 'products.deactivated'),
+      description: product.name,
+    })
   } catch (err) {
     error.value = friendlyError(err, 'products.saveFailed')
     app.pushToast({ type: 'error', message: app.t('products.saveFailed'), description: error.value })
+  } finally {
+    statusSaving.value = false
   }
 }
 
@@ -596,7 +651,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section>
+  <section class="min-w-0 max-w-full">
     <PageHeader :title="app.t('products.title')" :eyebrow="app.t('products.eyebrow')" :description="app.t('products.description')" icon="package">
       <div class="flex flex-wrap gap-2">
         <AppButton v-if="canImportProducts" variant="secondary" icon="upload" @click="openProductImport">{{ app.t('products.importData') }}</AppButton>
@@ -610,9 +665,9 @@ onBeforeUnmount(() => {
       <StatCard :label="app.t('products.needsAttention')" :value="lowSignalCount" :helper="app.t('products.attentionHelper')" icon="bell" tone="warning" />
     </div>
 
-    <div class="grid gap-4">
-      <AppCard class="dark:bg-slate-900/80">
-        <div class="grid gap-3 lg:grid-cols-5">
+    <div class="min-w-0 max-w-full grid gap-4">
+      <AppCard class="min-w-0 max-w-full dark:bg-slate-900/80">
+        <div class="grid min-w-0 max-w-full gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <AppInput v-model="filters.q" :label="app.t('products.search')" :placeholder="app.t('products.searchPlaceholder')" />
           <AppSelect v-model="filters.category_id" :label="app.t('products.category')">
             <option value="">{{ app.t('products.all') }}</option>
@@ -630,20 +685,20 @@ onBeforeUnmount(() => {
             <option value="out_of_stock">{{ app.t('products.outOfStock') }}</option>
             <option value="reorder_point">{{ app.t('products.reorderStock') }}</option>
           </AppSelect>
-          <div class="flex items-end"><AppButton class="w-full" icon="search" @click="load">{{ app.t('products.apply') }}</AppButton></div>
+          <div class="flex items-end sm:col-span-2 xl:col-span-1"><AppButton class="w-full" icon="search" @click="applyFilters">{{ app.t('products.apply') }}</AppButton></div>
         </div>
       </AppCard>
 
-      <AppCard class="dark:bg-slate-900/80">
+      <AppCard class="min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
         <AppLoadingState v-if="loading" :label="app.t('products.loading')" />
         <AppEmptyState v-else-if="products.length === 0" :title="app.t('products.none')" :description="app.t('products.emptyDescription')">
           <template v-if="canCreate">
           </template>
         </AppEmptyState>
 
-        <div v-else>
-          <div class="hidden overflow-x-auto md:block">
-            <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+        <div v-else class="min-w-0 max-w-full">
+          <div class="hidden w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain md:block">
+            <table class="w-full min-w-[980px] divide-y divide-slate-200 text-sm dark:divide-slate-800">
               <thead class="bg-slate-50 dark:bg-slate-950/70">
                 <tr>
                   <th class="px-3 py-2 text-left">{{ app.t('products.name') }}</th>
@@ -656,7 +711,7 @@ onBeforeUnmount(() => {
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                <tr v-for="product in products" :key="product.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
+                <tr v-for="product in visibleProducts" :key="product.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
                   <td class="px-3 py-2">
                     <div class="flex min-w-0 items-center gap-3">
                       <ProductAvatar :src="product.image_url" :updated-at="product.image_updated_at" :name="product.name" size="md" :muted="!product.is_active" />
@@ -689,7 +744,7 @@ onBeforeUnmount(() => {
                       <AppButton v-if="canDeactivate"
                         class="!box-border !h-10 !min-h-10 !w-28 !min-w-28 !shrink-0 !px-3 !py-0"
                         :variant="product.is_active ? 'danger' : 'secondary'"
-                        @click="setActive(product, !product.is_active)">
+                        @click="openStatusConfirm(product)">
                         {{ product.is_active ? app.t('products.deactivate') : app.t('products.activate') }}
                       </AppButton>
                     </div>
@@ -700,7 +755,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="grid gap-3 md:hidden">
-            <article v-for="product in products" :key="product.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/60">
+            <article v-for="product in visibleProducts" :key="product.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/60">
               <div class="flex items-start justify-between gap-3">
                 <div class="flex min-w-0 items-start gap-3">
                   <ProductAvatar :src="product.image_url" :updated-at="product.image_updated_at" :name="product.name" size="lg" :muted="!product.is_active" />
@@ -720,8 +775,28 @@ onBeforeUnmount(() => {
               <div class="mt-3 flex flex-wrap gap-2">
                 <AppButton data-stock-tooltip-trigger class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="map-pin" :title="app.t('products.stocks')" :aria-label="app.t('products.stocks')" @click="showStocks($event, product)" />
                 <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('products.edit')" :aria-label="app.t('products.edit')" @click="openEdit(product)" />
+                <AppButton v-if="canDeactivate"
+                  class="min-w-28 flex-1 sm:flex-none"
+                  :variant="product.is_active ? 'danger' : 'secondary'"
+                  @click="openStatusConfirm(product)">
+                  {{ product.is_active ? app.t('products.deactivate') : app.t('products.activate') }}
+                </AppButton>
               </div>
             </article>
+          </div>
+
+          <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('products.show') }}</span>
+              <AppPageSizeSelect :model-value="pageSize" @update:model-value="changePageSize" />
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('products.perPage') }}</span>
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('products.totalRows') }} {{ products.length }}</span>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+              <AppButton variant="secondary" :disabled="page <= 1" @click="previousPage">{{ app.t('products.previous') }}</AppButton>
+              <span class="font-bold text-slate-600 dark:text-slate-300">{{ t('products.page', { page, total: totalPages }) }}</span>
+              <AppButton variant="secondary" :disabled="page >= totalPages" @click="nextPage">{{ app.t('products.next') }}</AppButton>
+            </div>
           </div>
         </div>
       </AppCard>
@@ -800,6 +875,18 @@ onBeforeUnmount(() => {
       :loading="saving || imageSaving"
       @close="saveConfirmOpen = false"
       @confirm="save"
+    />
+
+    <ConfirmDialog
+      :open="Boolean(statusTarget)"
+      :title="statusConfirmTitle"
+      :message="statusConfirmMessage"
+      :confirm-label="app.t(statusNextActive ? 'products.activate' : 'products.deactivate')"
+      :cancel-label="app.t('products.cancel')"
+      :destructive="!statusNextActive"
+      :loading="statusSaving"
+      @close="closeStatusConfirm"
+      @confirm="confirmStatusChange"
     />
 
     <AppModal :open="importModalOpen" :title="app.t('products.importTitle')" :description="app.t('products.importDescription')" :close-label="app.t('products.cancel')" size="xl" @close="closeProductImport">

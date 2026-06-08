@@ -24,6 +24,7 @@ function requiresAuth(path: string) {
 
 export async function apiClient<T>(path: string, init: RequestInit = {}): Promise<T> {
   const shouldRequireAuth = requiresAuth(path)
+  const method = (init.method ?? 'GET').toUpperCase()
   const headers = shouldRequireAuth ? authHeaders(init.headers) : new Headers(init.headers)
   if (!(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
@@ -32,6 +33,7 @@ export async function apiClient<T>(path: string, init: RequestInit = {}): Promis
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers,
+    cache: init.cache ?? (method === 'GET' ? 'no-store' : undefined),
   })
 
   const envelope = (await response.json().catch(() => ({ success: false, error: { message: response.statusText } }))) as ApiEnvelope<T>

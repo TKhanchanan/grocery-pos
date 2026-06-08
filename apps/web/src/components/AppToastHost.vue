@@ -7,8 +7,9 @@ const app = useAppStore()
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-x-3 top-3 z-[70] grid justify-items-end gap-2 sm:inset-x-auto sm:right-4 sm:top-4">
+    <div class="pointer-events-none fixed inset-x-3 top-3 z-[300] grid justify-items-end gap-2 sm:inset-x-auto sm:right-4 sm:top-4">
       <AppToast
+        class="pointer-events-auto"
         v-for="toast in app.toasts"
         :key="toast.id"
         :type="toast.type"

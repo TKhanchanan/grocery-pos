@@ -270,7 +270,8 @@ func (s *Server) productSalesReport(ctx context.Context, r *http.Request, orderB
 
 func (s *Server) productSalesReportForWhere(ctx context.Context, where []string, args []any, orderBy string, limit int) ([]ProductSalesReport, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT si.product_id, si.product_name_snapshot, si.sku_snapshot, COALESCE(SUM(si.quantity), 0),
+		SELECT si.product_id, COALESCE(p.name, MAX(si.product_name_snapshot)), COALESCE(p.sku, MAX(si.sku_snapshot)),
+		       COALESCE(SUM(si.quantity), 0),
 		       COALESCE(SUM(si.line_total), 0), COALESCE(SUM(si.line_cost), 0),
 		       COALESCE(SUM(si.line_total - si.line_cost), 0) AS profit,
 		       p.image_url, p.image_updated_at
@@ -278,7 +279,7 @@ func (s *Server) productSalesReportForWhere(ctx context.Context, where []string,
 		JOIN sales s ON s.id=si.sale_id
 		LEFT JOIN products p ON p.id=si.product_id
 		WHERE `+strings.Join(where, " AND ")+`
-		GROUP BY si.product_id, si.product_name_snapshot, si.sku_snapshot, p.image_url, p.image_updated_at
+		GROUP BY si.product_id, p.name, p.sku, p.image_url, p.image_updated_at
 		ORDER BY `+orderBy+`
 		LIMIT ?`, append(args, limit)...)
 	if err != nil {
