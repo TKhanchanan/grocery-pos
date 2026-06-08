@@ -1,3 +1,5 @@
+import { authHeaders, handleAuthFailure } from './session'
+
 export interface ApiEnvelope<T> {
   success: boolean
   data?: T
@@ -16,14 +18,15 @@ export function assetURL(path?: string | null) {
   return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+function requiresAuth(path: string) {
+  return path !== '/v1/auth/login'
+}
+
 export async function apiClient<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('auth_token')
-  const headers = new Headers(init.headers)
+  const shouldRequireAuth = requiresAuth(path)
+  const headers = shouldRequireAuth ? authHeaders(init.headers) : new Headers(init.headers)
   if (!(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
-  }
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -32,6 +35,9 @@ export async function apiClient<T>(path: string, init: RequestInit = {}): Promis
   })
 
   const envelope = (await response.json().catch(() => ({ success: false, error: { message: response.statusText } }))) as ApiEnvelope<T>
+  if (shouldRequireAuth && response.status === 401) {
+    throw handleAuthFailure(envelope.error?.message)
+  }
   if (!response.ok || !envelope.success) {
     throw new Error(envelope.error?.message ?? 'API request failed')
   }

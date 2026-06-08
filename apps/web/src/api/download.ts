@@ -1,13 +1,13 @@
 import { API_BASE_URL } from './client'
+import { authHeaders, handleAuthFailure } from './session'
 
 export async function downloadFile(path: string, fallbackName: string) {
-  const token = localStorage.getItem('auth_token')
-  const headers = new Headers()
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const headers = authHeaders()
 
   const response = await fetch(`${API_BASE_URL}${path}`, { headers })
   if (!response.ok) {
     const payload = await response.json().catch(() => null)
+    if (response.status === 401) throw handleAuthFailure(payload?.error?.message)
     throw new Error(payload?.error?.message ?? response.statusText)
   }
 

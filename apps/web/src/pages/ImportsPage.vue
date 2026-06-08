@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { API_BASE_URL, apiClient, postJSON } from '../api/client'
 import { downloadFile } from '../api/download'
+import { authHeaders, handleAuthFailure } from '../api/session'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
@@ -52,16 +53,16 @@ async function previewImport() {
   if (!selectedFile.value) return
   uploading.value = true
   error.value = ''
-  const token = localStorage.getItem('auth_token')
   const form = new FormData()
   form.append('file', selectedFile.value)
   try {
     const response = await fetch(`${API_BASE_URL}/v1/imports/products/preview`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: authHeaders(),
       body: form,
     })
     const envelope = await response.json()
+    if (response.status === 401) throw handleAuthFailure(envelope.error?.message)
     if (!response.ok || !envelope.success) {
       throw new Error(envelope.error?.message ?? 'Preview failed')
     }

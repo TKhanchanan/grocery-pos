@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { API_BASE_URL, apiClient, deleteJSON, patchJSON, postJSON } from '../api/client'
 import { downloadFile } from '../api/download'
+import { authHeaders, handleAuthFailure } from '../api/session'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
 import AppCheckbox from '../components/AppCheckbox.vue'
@@ -292,16 +293,16 @@ async function previewProductImport() {
   if (!selectedImportFile.value) return
   importUploading.value = true
   importError.value = ''
-  const token = localStorage.getItem('auth_token')
   const body = new FormData()
   body.append('file', selectedImportFile.value)
   try {
     const response = await fetch(`${API_BASE_URL}/v1/imports/products/preview`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: authHeaders(),
       body,
     })
     const envelope = await response.json()
+    if (response.status === 401) throw handleAuthFailure(envelope.error?.message)
     if (!response.ok || !envelope.success) throw new Error(envelope.error?.message ?? app.t('products.importPreviewFailed'))
     importPreviewJob.value = envelope.data as ImportJob
   } catch (err) {

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiClient, postJSON } from '../api/client'
+import { clearAuthSession, handleAuthFailure, readAuthToken } from '../api/session'
 import type { AssignedRole, AuthMeResponse, PermissionCode, Role, User } from '../types/navigation'
 
 interface LoginResponse {
@@ -22,7 +23,7 @@ function readStoredJSON<T>(key: string, fallback: T): T {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('auth_token'))
+  const token = ref<string | null>(readAuthToken())
   const user = ref<User | null>(readStoredJSON<User | null>('auth_user', null))
   const roles = ref<AssignedRole[]>(readStoredJSON<AssignedRole[]>('auth_roles', []))
   const permissions = ref<PermissionCode[]>(readStoredJSON<PermissionCode[]>('auth_permissions', []))
@@ -44,22 +45,26 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('auth_permissions', JSON.stringify(permissions.value))
   }
 
-  async function logout() {
-    if (token.value) {
-      await postJSON('/v1/auth/logout', {}).catch(() => undefined)
-    }
+  function clearSession() {
     token.value = null
     user.value = null
     roles.value = []
     permissions.value = []
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('auth_user')
-    localStorage.removeItem('auth_roles')
-    localStorage.removeItem('auth_permissions')
+    clearAuthSession()
+  }
+
+  async function logout() {
+    if (token.value) {
+      await postJSON('/v1/auth/logout', {}).catch(() => undefined)
+    }
+    clearSession()
   }
 
   async function loadMe() {
-    if (!token.value) return
+    if (!readAuthToken()) {
+      clearSession()
+      throw handleAuthFailure('Missing authentication token')
+    }
     const result = await apiClient<AuthMeResponse>('/v1/auth/me')
     user.value = result.user
     roles.value = result.roles
@@ -95,5 +100,5 @@ export const useAuthStore = defineStore('auth', () => {
     return can(item.roles)
   }
 
-  return { token, user, roles, permissions, isAuthenticated, userInitials, login, logout, loadMe, can, hasPermission, hasAnyPermission, hasAllPermissions, canViewMenu }
+  return { token, user, roles, permissions, isAuthenticated, userInitials, login, logout, clearSession, loadMe, can, hasPermission, hasAnyPermission, hasAllPermissions, canViewMenu }
 })

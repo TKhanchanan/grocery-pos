@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { AuthSessionError, readAuthToken } from '../api/session'
 import { useAuthStore } from '../stores/auth'
 import type { PermissionCode, Role } from '../types/navigation'
 
@@ -37,11 +38,22 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (to.meta.public) {
+    if (!readAuthToken()) auth.clearSession()
     return auth.isAuthenticated && to.path === '/login' ? '/dashboard' : true
   }
-  if (!auth.isAuthenticated) return '/login'
+  if (!readAuthToken() || !auth.isAuthenticated) {
+    auth.clearSession()
+    return '/login'
+  }
   if (auth.permissions.length === 0) {
-    await auth.loadMe().catch(() => undefined)
+    try {
+      await auth.loadMe()
+    } catch (err) {
+      if (err instanceof AuthSessionError) {
+        auth.clearSession()
+        return '/login'
+      }
+    }
   }
 
   const permission = to.meta.permission as PermissionCode | undefined
