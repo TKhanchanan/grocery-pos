@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { apiClient, patchJSON, postJSON } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
 import AppButton from '../components/AppButton.vue'
@@ -8,6 +8,7 @@ import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import AppModal from '../components/AppModal.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import type { TranslationKey } from '../i18n'
@@ -27,6 +28,8 @@ const modalOpen = ref(false)
 const saveConfirmOpen = ref(false)
 const nameError = ref('')
 const pendingStatusCategory = ref<Category | null>(null)
+const page = ref(1)
+const pageSize = ref(10)
 const form = reactive({ id: 0, name: '', description: '' })
 
 const canCreate = computed(() => auth.hasPermission('categories.create'))
@@ -39,6 +42,11 @@ const filteredCategories = computed(() => {
   const query = search.value.trim().toLowerCase()
   if (!query) return categories.value
   return categories.value.filter((item) => `${item.name} ${item.description}`.toLowerCase().includes(query))
+})
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredCategories.value.length / pageSize.value)))
+const visibleCategories = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filteredCategories.value.slice(start, start + pageSize.value)
 })
 const pendingStatusNextActive = computed(() => pendingStatusCategory.value ? !pendingStatusCategory.value.is_active : false)
 const pendingStatusMessage = computed(() => pendingStatusNextActive.value ? app.t('categories.confirmActivate') : app.t('categories.confirmDeactivate'))
@@ -55,6 +63,7 @@ async function load() {
   error.value = ''
   try {
     categories.value = await apiClient<Category[]>('/v1/categories')
+    page.value = Math.min(page.value, totalPages.value)
   } catch (err) {
     error.value = friendlyError(err, 'categories.loadFailed')
   } finally {
@@ -65,7 +74,21 @@ async function load() {
 function friendlyError(err: unknown, fallback: 'categories.loadFailed' | 'categories.saveFailed' | 'categories.statusFailed') {
   const message = err instanceof Error ? err.message : app.t(fallback)
   if (message.toLowerCase().includes('permission')) return app.t('categories.noPermission')
+  if (message.toLowerCase().includes('active products')) return app.t('categories.activeProductsError')
   return message
+}
+
+function changePageSize(value: number) {
+  pageSize.value = value
+  page.value = 1
+}
+
+function previousPage() {
+  if (page.value > 1) page.value -= 1
+}
+
+function nextPage() {
+  if (page.value < totalPages.value) page.value += 1
 }
 
 function reset() {
@@ -154,23 +177,27 @@ async function confirmStatusChange() {
   }
 }
 
+watch(search, () => {
+  page.value = 1
+})
+
 onMounted(load)
 </script>
 
 <template>
-  <section>
+  <section class="min-w-0 max-w-full">
     <PageHeader :title="app.t('categories.title')" :eyebrow="app.t('categories.eyebrow')" :description="app.t('categories.description')" icon="tags">
       <AppButton v-if="canCreate" icon="plus" @click="openCreate">{{ app.t('categories.add') }}</AppButton>
     </PageHeader>
 
-    <div class="grid gap-4">
-      <AppCard class="dark:bg-slate-900/80">
+    <div class="grid min-w-0 max-w-full gap-4">
+      <AppCard class="min-w-0 max-w-full dark:bg-slate-900/80">
         <div class="grid gap-3">
           <AppInput v-model="search" :label="app.t('categories.search')" :placeholder="app.t('categories.searchPlaceholder')" />
         </div>
       </AppCard>
 
-      <AppCard class="dark:bg-slate-900/80">
+      <AppCard class="min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
         <div v-if="error" class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ error }}</div>
         <AppLoadingState v-if="loading" :label="app.t('categories.loading')" />
         <AppEmptyState v-else-if="filteredCategories.length === 0" :title="app.t('categories.empty')" :description="app.t('categories.description')">
@@ -178,9 +205,15 @@ onMounted(load)
           </template>
         </AppEmptyState>
 
-        <div v-else>
-          <div class="hidden overflow-x-auto md:block">
-            <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+        <div v-else class="min-w-0 max-w-full">
+          <div class="hidden w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain md:block">
+            <table class="w-full min-w-[960px] table-fixed divide-y divide-slate-200 text-sm dark:divide-slate-800">
+              <colgroup>
+                <col class="w-[220px]" />
+                <col />
+                <col class="w-[130px]" />
+                <col class="w-[200px]" />
+              </colgroup>
               <thead class="bg-slate-50 dark:bg-slate-950/70">
                 <tr>
                   <th class="px-3 py-3 text-left font-black">{{ app.t('categories.name') }}</th>
@@ -190,14 +223,20 @@ onMounted(load)
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                <tr v-for="item in filteredCategories" :key="item.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
-                  <td class="px-3 py-3 font-semibold">{{ item.name }}</td>
-                  <td class="px-3 py-3 text-slate-600 dark:text-slate-300">{{ item.description || app.t('categories.noDescription') }}</td>
+                <tr v-for="item in visibleCategories" :key="item.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
+                  <td class="px-3 py-3">
+                    <p class="truncate font-semibold" :title="item.name">{{ item.name }}</p>
+                  </td>
+                  <td class="px-3 py-3 text-slate-600 dark:text-slate-300">
+                    <p class="line-clamp-2 break-words [overflow-wrap:anywhere]" :title="item.description || app.t('categories.noDescription')">
+                      {{ item.description || app.t('categories.noDescription') }}
+                    </p>
+                  </td>
                   <td class="px-3 py-3">
                     <AppBadge :tone="item.is_active ? 'success' : 'neutral'">{{ item.is_active ? app.t('categories.active') : app.t('categories.inactive') }}</AppBadge>
                   </td>
                   <td class="px-3 py-3 text-right">
-                    <div class="flex flex-wrap justify-end gap-2">
+                    <div class="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
                       <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('categories.edit')" :aria-label="app.t('categories.edit')" @click="openEdit(item)" />
                       <AppButton v-if="canDeactivate" :variant="item.is_active ? 'danger' : 'secondary'" @click="requestStatusChange(item)">
                         {{ item.is_active ? app.t('categories.deactivate') : app.t('categories.activate') }}
@@ -210,11 +249,13 @@ onMounted(load)
           </div>
 
           <div class="grid gap-3 md:hidden">
-            <article v-for="item in filteredCategories" :key="item.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/60">
+            <article v-for="item in visibleCategories" :key="item.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/60">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                  <h2 class="truncate font-black">{{ item.name }}</h2>
-                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ item.description || app.t('categories.noDescription') }}</p>
+                  <h2 class="truncate font-black" :title="item.name">{{ item.name }}</h2>
+                  <p class="mt-1 line-clamp-3 break-words text-sm text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400" :title="item.description || app.t('categories.noDescription')">
+                    {{ item.description || app.t('categories.noDescription') }}
+                  </p>
                 </div>
                 <AppBadge :tone="item.is_active ? 'success' : 'neutral'">{{ item.is_active ? app.t('categories.active') : app.t('categories.inactive') }}</AppBadge>
               </div>
@@ -225,6 +266,20 @@ onMounted(load)
                 </AppButton>
               </div>
             </article>
+          </div>
+
+          <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('categories.show') }}</span>
+              <AppPageSizeSelect :model-value="pageSize" @update:model-value="changePageSize" />
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('categories.perPage') }}</span>
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('categories.totalRows') }} {{ filteredCategories.length }}</span>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+              <AppButton variant="secondary" :disabled="page <= 1" @click="previousPage">{{ app.t('categories.previous') }}</AppButton>
+              <span class="font-bold text-slate-600 dark:text-slate-300">{{ t('categories.page', { page, total: totalPages }) }}</span>
+              <AppButton variant="secondary" :disabled="page >= totalPages" @click="nextPage">{{ app.t('categories.next') }}</AppButton>
+            </div>
           </div>
         </div>
       </AppCard>

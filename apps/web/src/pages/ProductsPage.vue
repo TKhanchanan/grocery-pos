@@ -102,6 +102,7 @@ const canImportProducts = computed(() => auth.hasAnyPermission(['imports.view', 
 const canDownloadImportTemplate = computed(() => auth.hasPermission('imports.template.download'))
 const canPreviewImport = computed(() => auth.hasPermission('imports.products.preview'))
 const canConfirmImport = computed(() => auth.hasPermission('imports.products.confirm'))
+const activeCategories = computed(() => categories.value.filter((category) => category.is_active))
 const activeCount = computed(() => products.value.filter((product) => product.is_active).length)
 const lowSignalCount = computed(() => products.value.filter((product) => product.stock_status !== 'in_stock').length)
 const totalStock = computed(() => products.value.reduce((sum, product) => sum + product.total_stock, 0))
@@ -251,12 +252,13 @@ function openCreate() {
 function openEdit(product: Product) {
   resetForm()
   selectedProduct.value = product
+  const categoryActive = categories.value.some((category) => category.id === product.category_id && category.is_active)
   Object.assign(form, {
     id: product.id,
     sku: product.sku,
     name: product.name,
     barcode: product.barcode ?? '',
-    category_id: product.category_id ? String(product.category_id) : '',
+    category_id: categoryActive && product.category_id ? String(product.category_id) : '',
     selling_price: product.selling_price,
     unit_cost: product.unit_cost,
     unit: product.unit,
@@ -671,7 +673,7 @@ onBeforeUnmount(() => {
           <AppInput v-model="filters.q" :label="app.t('products.search')" :placeholder="app.t('products.searchPlaceholder')" />
           <AppSelect v-model="filters.category_id" :label="app.t('products.category')">
             <option value="">{{ app.t('products.all') }}</option>
-            <option v-for="category in categories" :key="category.id" :value="String(category.id)">{{ category.name }}</option>
+            <option v-for="category in activeCategories" :key="category.id" :value="String(category.id)">{{ category.name }}</option>
           </AppSelect>
           <AppSelect v-model="filters.status" :label="app.t('products.status')">
             <option value="">{{ app.t('products.all') }}</option>
@@ -834,7 +836,7 @@ onBeforeUnmount(() => {
             </div>
             <AppSelect v-model="form.category_id" :label="app.t('products.category')">
               <option value="">{{ app.t('products.noCategory') }}</option>
-              <option v-for="category in categories" :key="category.id" :value="String(category.id)">{{ category.name }}</option>
+              <option v-for="category in activeCategories" :key="category.id" :value="String(category.id)">{{ category.name }}</option>
             </AppSelect>
             <AppInput v-model="form.unit" :label="app.t('products.unit')" :placeholder="app.t('products.unitPlaceholder')" />
           </div>

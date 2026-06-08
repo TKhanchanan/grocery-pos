@@ -155,6 +155,17 @@ func (s *Server) categoryStatus(w http.ResponseWriter, r *http.Request) {
 		response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 		return
 	}
+	if !body.Active {
+		var activeProducts int
+		if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM products WHERE category_id=? AND active=TRUE`, id).Scan(&activeProducts); err != nil {
+			response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not check category products.")
+			return
+		}
+		if activeProducts > 0 {
+			response.ErrorJSON(w, http.StatusConflict, "CATEGORY_HAS_ACTIVE_PRODUCTS", "Category still has active products.")
+			return
+		}
+	}
 	if _, err := s.db.ExecContext(r.Context(), `UPDATE categories SET active=? WHERE id=?`, body.Active, id); err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, "UPDATE_CATEGORY_STATUS_FAILED", "Could not update category status.")
 		return
@@ -585,6 +596,9 @@ func (s *Server) createProduct(ctx context.Context, body productInput) (Product,
 	if err := validateProduct(body); err != nil {
 		return Product{}, err
 	}
+	if err := s.validateActiveCategory(ctx, body.CategoryID); err != nil {
+		return Product{}, err
+	}
 	barcode := nullableBarcode(body.Barcode)
 	result, err := s.db.ExecContext(ctx, `
 		INSERT INTO products(category_id, sku, barcode, name, unit, price, cost, threshold, reorder_point, active)
@@ -604,6 +618,9 @@ func (s *Server) updateProduct(ctx context.Context, id uint64, body productInput
 	if err := validateProduct(body); err != nil {
 		return Product{}, err
 	}
+	if err := s.validateActiveCategory(ctx, body.CategoryID); err != nil {
+		return Product{}, err
+	}
 	barcode := nullableBarcode(body.Barcode)
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE products SET category_id=?, sku=?, barcode=?, name=?, unit=?, price=?, cost=?, threshold=?, reorder_point=?, active=?
@@ -616,6 +633,23 @@ func (s *Server) updateProduct(ctx context.Context, id uint64, body productInput
 		return Product{}, err
 	}
 	return s.productByID(ctx, id)
+}
+
+func (s *Server) validateActiveCategory(ctx context.Context, categoryID *uint64) error {
+	if categoryID == nil {
+		return nil
+	}
+	var active bool
+	if err := s.db.QueryRowContext(ctx, `SELECT active FROM categories WHERE id=?`, *categoryID).Scan(&active); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("category not found")
+		}
+		return err
+	}
+	if !active {
+		return errors.New("category is inactive")
+	}
+	return nil
 }
 
 func (s *Server) productByID(ctx context.Context, id uint64) (Product, error) {

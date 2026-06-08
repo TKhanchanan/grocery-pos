@@ -234,7 +234,7 @@ func (s *Server) listPOSProducts(ctx context.Context, r *http.Request, locationI
 	}
 	offset := (page - 1) * pageSize
 
-	where := []string{"p.active=TRUE", "l.active=TRUE", "l.id=?"}
+	where := []string{"p.active=TRUE", "l.active=TRUE", "l.id=?", "(p.category_id IS NULL OR c.active=TRUE)"}
 	args := []any{locationID}
 	if query != "" {
 		where = append(where, "(p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)")
