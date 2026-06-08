@@ -21,6 +21,7 @@ import { useCartStore } from '../stores/cart'
 import type { Category, Location, POSProduct, POSProductPage, Receipt, StockStatus } from '../types/navigation'
 import { formatThaiDateTime } from '../utils/date'
 import { prepareReceiptPrintArea, resetReceiptPrintArea } from '../utils/print'
+import { defaultReceiptSettings, loadReceiptSettings } from '../utils/receiptSettings'
 
 const app = useAppStore()
 const auth = useAuthStore()
@@ -28,6 +29,7 @@ const cart = useCartStore()
 const locations = ref<Location[]>([])
 const categories = ref<Category[]>([])
 const products = ref<POSProduct[]>([])
+const receiptSettings = ref({ ...defaultReceiptSettings })
 const selectedLocationID = ref('')
 const selectedCategoryID = ref('')
 const search = ref('')
@@ -55,6 +57,10 @@ const scannerMessage = computed(() => app.t(scannerMessageKey.value))
 const productCountLabel = computed(() => t('pos.productsCount', { count: productTotal.value }))
 const productPageLabel = computed(() => t('pos.page', { page: productPage.value, total: productTotalPages.value }))
 const receiptPreviewDate = computed(() => saleConfirmOpen.value ? formatThaiDateTime(new Date()) : '-')
+const receiptShopName = computed(() => receiptSettings.value.shop_name.trim() || defaultReceiptSettings.shop_name)
+const receiptShopPhone = computed(() => receiptSettings.value.shop_phone.trim())
+const receiptShopAddress = computed(() => receiptSettings.value.shop_address.trim())
+const receiptFooter = computed(() => receiptSettings.value.receipt_footer.trim() || app.t('receipt.thankYou'))
 const activeCategories = computed(() => categories.value.filter((category) => category.is_active))
 const selectedCategoryName = computed(() => {
   if (!selectedCategoryID.value) return app.t('pos.allCategories')
@@ -110,6 +116,10 @@ async function loadLocations() {
 
 async function loadCategories() {
   categories.value = await apiClient<Category[]>('/v1/pos/categories').catch(() => [])
+}
+
+async function loadReceiptProfile() {
+  receiptSettings.value = await loadReceiptSettings().catch(() => ({ ...defaultReceiptSettings }))
 }
 
 function readProductPage(result: POSProductPage | POSProduct[]) {
@@ -323,7 +333,7 @@ watch(() => cart.totalAmount, (total) => {
 onMounted(async () => {
   window.addEventListener('beforeprint', handleBeforePrint)
   window.addEventListener('afterprint', handleAfterPrint)
-  await Promise.all([loadLocations(), loadCategories()])
+  await Promise.all([loadLocations(), loadCategories(), loadReceiptProfile()])
   await loadProducts()
 })
 
@@ -474,7 +484,9 @@ onBeforeUnmount(() => {
       <div class="grid gap-4">
         <article id="receipt-print-area" class="mx-auto w-full max-w-[420px] rounded-xl bg-white p-4 text-slate-950 shadow-sm ring-1 ring-slate-200">
           <header class="border-b border-dashed border-slate-300 pb-3 text-center">
-            <p class="text-lg font-black">Grocery POS</p>
+            <p class="text-lg font-black">{{ receiptShopName }}</p>
+            <p v-if="receiptShopAddress" class="whitespace-pre-line text-xs font-bold text-slate-600">{{ receiptShopAddress }}</p>
+            <p v-if="receiptShopPhone" class="text-xs font-bold text-slate-600">{{ receiptShopPhone }}</p>
             <p class="text-sm font-semibold text-slate-600">{{ app.t('pos.receiptPreview') }}</p>
           </header>
 
@@ -511,8 +523,8 @@ onBeforeUnmount(() => {
             <div class="flex justify-between gap-3"><dt class="text-slate-500">{{ app.t('receipt.change') }}</dt><dd class="text-right font-bold">{{ money(cart.changeAmount) }}</dd></div>
           </dl>
 
-          <footer class="mt-3 border-t border-dashed border-slate-300 pt-3 text-center text-xs font-bold text-slate-600">
-            {{ app.t('receipt.thankYou') }}
+          <footer class="mt-3 whitespace-pre-line border-t border-dashed border-slate-300 pt-3 text-center text-xs font-bold text-slate-600">
+            {{ receiptFooter }}
           </footer>
         </article>
 

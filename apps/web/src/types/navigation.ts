@@ -393,6 +393,13 @@ export interface AppSettings {
   line_target_id: string
 }
 
+export interface ReceiptSettings {
+  shop_name: string
+  shop_phone: string
+  shop_address: string
+  receipt_footer: string
+}
+
 export interface LineSettings {
   line_enabled: boolean
   line_token?: string

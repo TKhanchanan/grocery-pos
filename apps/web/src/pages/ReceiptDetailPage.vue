@@ -9,10 +9,12 @@ import { useAppStore } from '../stores/app'
 import type { Receipt } from '../types/navigation'
 import { formatThaiDateTime } from '../utils/date'
 import { prepareReceiptPrintArea, resetReceiptPrintArea } from '../utils/print'
+import { defaultReceiptSettings, loadReceiptSettings } from '../utils/receiptSettings'
 
 const app = useAppStore()
 const route = useRoute()
 const receipt = ref<Receipt | null>(null)
+const receiptSettings = ref({ ...defaultReceiptSettings })
 const loading = ref(false)
 const error = ref('')
 const receiptID = computed(() => {
@@ -21,6 +23,10 @@ const receiptID = computed(() => {
   return String(paramID ?? route.query.id ?? '')
 })
 const locale = computed(() => app.language === 'th' ? 'th-TH' : 'en-US')
+const receiptShopName = computed(() => receiptSettings.value.shop_name.trim() || defaultReceiptSettings.shop_name)
+const receiptShopPhone = computed(() => receiptSettings.value.shop_phone.trim())
+const receiptShopAddress = computed(() => receiptSettings.value.shop_address.trim())
+const receiptFooter = computed(() => receiptSettings.value.receipt_footer.trim() || app.t('receipt.thankYou'))
 const handleBeforePrint = () => prepareReceiptPrintArea()
 const handleAfterPrint = () => resetReceiptPrintArea()
 
@@ -50,6 +56,10 @@ async function loadReceipt() {
   }
 }
 
+async function loadReceiptProfile() {
+  receiptSettings.value = await loadReceiptSettings().catch(() => ({ ...defaultReceiptSettings }))
+}
+
 function printReceipt() {
   if (!receipt.value || loading.value) return
   prepareReceiptPrintArea()
@@ -60,6 +70,7 @@ watch(receiptID, loadReceipt)
 onMounted(() => {
   window.addEventListener('beforeprint', handleBeforePrint)
   window.addEventListener('afterprint', handleAfterPrint)
+  loadReceiptProfile()
   loadReceipt()
 })
 onBeforeUnmount(() => {
@@ -91,7 +102,9 @@ onBeforeUnmount(() => {
     <div v-if="receipt" class="receipt-preview">
       <article id="receipt-print-area" class="receipt-print-area">
         <header class="receipt-shop">
-          <p class="receipt-shop-name">Grocery POS</p>
+          <p class="receipt-shop-name">{{ receiptShopName }}</p>
+          <p v-if="receiptShopAddress" class="receipt-shop-detail">{{ receiptShopAddress }}</p>
+          <p v-if="receiptShopPhone" class="receipt-shop-detail">{{ receiptShopPhone }}</p>
           <p>{{ app.t('receipt.receipt') }}</p>
         </header>
 
@@ -137,7 +150,7 @@ onBeforeUnmount(() => {
         </dl>
 
         <footer class="receipt-footer">
-          {{ app.t('receipt.thankYou') }}
+          {{ receiptFooter }}
         </footer>
       </article>
     </div>
@@ -169,6 +182,13 @@ onBeforeUnmount(() => {
 .receipt-shop-name {
   font-size: 18px;
   font-weight: 900;
+}
+
+.receipt-shop-detail {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: pre-line;
 }
 
 .receipt-meta,
@@ -263,6 +283,7 @@ onBeforeUnmount(() => {
   text-align: center;
   font-size: 12px;
   font-weight: 700;
+  white-space: pre-line;
 }
 
 @media print {

@@ -118,6 +118,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/purchase-orders/{id}/send", s.requirePermission(s.sendPurchaseOrder, "purchase_orders.send"))
 	mux.HandleFunc("POST /api/v1/purchase-orders/{id}/receive", s.requirePermission(s.receivePurchaseOrder, "purchase_orders.receive"))
 	mux.HandleFunc("POST /api/v1/purchase-orders/{id}/cancel", s.requirePermission(s.cancelPurchaseOrder, "purchase_orders.cancel"))
+	mux.HandleFunc("GET /api/v1/receipt-settings", s.requireAnyPermission(s.receiptSettings, "pos.view", "sales.receipt.view", "settings.view"))
 	mux.HandleFunc("GET /api/v1/settings", s.requirePermission(s.settings, "settings.view"))
 	mux.HandleFunc("PATCH /api/v1/settings", s.requirePermission(s.settings, "settings.update"))
 	mux.HandleFunc("GET /api/v1/settings/line", s.requirePermission(s.lineSettings, "settings.line.view"))

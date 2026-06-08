@@ -21,6 +21,13 @@ type AppSettings struct {
 	LineTargetID      string `json:"line_target_id"`
 }
 
+type ReceiptSettings struct {
+	ShopName      string `json:"shop_name"`
+	ShopPhone     string `json:"shop_phone"`
+	ShopAddress   string `json:"shop_address"`
+	ReceiptFooter string `json:"receipt_footer"`
+}
+
 type LineSettings struct {
 	LineEnabled     bool   `json:"line_enabled"`
 	LineToken       string `json:"line_token,omitempty"`
@@ -71,6 +78,15 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 	default:
 		response.ErrorJSON(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.")
 	}
+}
+
+func (s *Server) receiptSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.loadReceiptSettings(r.Context())
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "SETTINGS_LOAD_FAILED", "Could not load receipt settings.")
+		return
+	}
+	response.JSON(w, http.StatusOK, settings)
 }
 
 func (s *Server) lineSettings(w http.ResponseWriter, r *http.Request) {
@@ -155,6 +171,19 @@ func (s *Server) loadAppSettings(ctx context.Context, includeToken bool) (AppSet
 		LineTokenMasked:   maskToken(token),
 		LineConfigured:    token != "" && values["line_target_id"] != "",
 		LineTargetID:      values["line_target_id"],
+	}, nil
+}
+
+func (s *Server) loadReceiptSettings(ctx context.Context) (ReceiptSettings, error) {
+	values, err := s.settingsMap(ctx)
+	if err != nil {
+		return ReceiptSettings{}, err
+	}
+	return ReceiptSettings{
+		ShopName:      valueOr(values, "shop_name", "Grocery POS"),
+		ShopPhone:     values["shop_phone"],
+		ShopAddress:   values["shop_address"],
+		ReceiptFooter: valueOr(values, "receipt_footer", "ขอบคุณที่อุดหนุน"),
 	}, nil
 }
 
