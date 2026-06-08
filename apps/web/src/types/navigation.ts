@@ -67,6 +67,7 @@ export interface Category {
   name: string
   description: string
   is_active: boolean
+  count?: number
   created_at: string
 }
 
@@ -163,6 +164,8 @@ export interface POSProduct {
   sku: string
   name: string
   barcode: string | null
+  category_id: number | null
+  category_name: string | null
   image_url: string | null
   image_updated_at: string | null
   selling_price: number
@@ -173,6 +176,14 @@ export interface POSProduct {
   location_id: number
   stock: number
   stock_status: StockStatus
+}
+
+export interface POSProductPage {
+  items: POSProduct[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
 }
 
 export interface ReceiptItem {

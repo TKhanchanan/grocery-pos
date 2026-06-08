@@ -18,7 +18,7 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import { useCartStore } from '../stores/cart'
-import type { Location, POSProduct, Receipt, StockStatus } from '../types/navigation'
+import type { Category, Location, POSProduct, POSProductPage, Receipt, StockStatus } from '../types/navigation'
 import { formatThaiDateTime } from '../utils/date'
 import { prepareReceiptPrintArea, resetReceiptPrintArea } from '../utils/print'
 
@@ -26,10 +26,16 @@ const app = useAppStore()
 const auth = useAuthStore()
 const cart = useCartStore()
 const locations = ref<Location[]>([])
+const categories = ref<Category[]>([])
 const products = ref<POSProduct[]>([])
 const selectedLocationID = ref('')
+const selectedCategoryID = ref('')
 const search = ref('')
 const barcodeInput = ref('')
+const productPage = ref(1)
+const productPageSize = ref(12)
+const productTotal = ref(0)
+const productTotalPages = ref(1)
 const loading = ref(false)
 const error = ref('')
 const successReceipt = ref<Receipt | null>(null)
@@ -46,8 +52,14 @@ const canSubmit = computed(() => cart.items.length > 0 && cart.receivedAmount >=
 const canViewReceipt = computed(() => auth.hasPermission('sales.receipt.view'))
 const receiptPath = computed(() => successReceipt.value ? `/sales/${successReceipt.value.id}/receipt` : '/receipt-detail')
 const scannerMessage = computed(() => app.t(scannerMessageKey.value))
-const productCountLabel = computed(() => t('pos.productsCount', { count: products.value.length }))
+const productCountLabel = computed(() => t('pos.productsCount', { count: productTotal.value }))
+const productPageLabel = computed(() => t('pos.page', { page: productPage.value, total: productTotalPages.value }))
 const receiptPreviewDate = computed(() => saleConfirmOpen.value ? formatThaiDateTime(new Date()) : '-')
+const activeCategories = computed(() => categories.value.filter((category) => category.is_active))
+const selectedCategoryName = computed(() => {
+  if (!selectedCategoryID.value) return app.t('pos.allCategories')
+  return categories.value.find((category) => category.id === Number(selectedCategoryID.value))?.name ?? app.t('pos.allCategories')
+})
 
 const handleBeforePrint = () => prepareReceiptPrintArea()
 const handleAfterPrint = () => resetReceiptPrintArea()
@@ -96,14 +108,37 @@ async function loadLocations() {
   if (!selectedLocationID.value && firstActive) selectedLocationID.value = String(firstActive.id)
 }
 
+async function loadCategories() {
+  categories.value = await apiClient<Category[]>('/v1/pos/categories').catch(() => [])
+}
+
+function readProductPage(result: POSProductPage | POSProduct[]) {
+  if (Array.isArray(result)) {
+    products.value = result
+    productTotal.value = result.length
+    productTotalPages.value = 1
+    return
+  }
+  products.value = result.items
+  productTotal.value = result.total
+  productTotalPages.value = Math.max(result.total_pages, 1)
+  productPage.value = result.page
+  productPageSize.value = result.page_size
+}
+
 async function loadProducts() {
   if (!selectedLocationID.value) return
   loading.value = true
   error.value = ''
   try {
-    const params = new URLSearchParams({ location_id: selectedLocationID.value })
+    const params = new URLSearchParams({
+      location_id: selectedLocationID.value,
+      page: String(productPage.value),
+      page_size: String(productPageSize.value),
+    })
     if (search.value.trim()) params.set('q', search.value.trim())
-    products.value = await apiClient<POSProduct[]>(`/v1/pos/products?${params.toString()}`)
+    if (selectedCategoryID.value) params.set('category_id', selectedCategoryID.value)
+    readProductPage(await apiClient<POSProductPage | POSProduct[]>(`/v1/pos/products?${params.toString()}`))
     cart.refreshStock(products.value)
   } catch (err) {
     error.value = err instanceof Error ? err.message : app.t('pos.noProducts')
@@ -115,6 +150,37 @@ async function loadProducts() {
 function scheduleLoadProducts() {
   window.clearTimeout(loadTimer)
   loadTimer = window.setTimeout(loadProducts, 180)
+}
+
+function selectCategory(id: string) {
+  selectedCategoryID.value = id
+}
+
+function previousProductPage() {
+  if (productPage.value <= 1) return
+  productPage.value -= 1
+}
+
+function nextProductPage() {
+  if (productPage.value >= productTotalPages.value) return
+  productPage.value += 1
+}
+
+function setProductPageSize(value: string) {
+  productPageSize.value = Number(value) || 12
+}
+
+async function findBarcodeProduct(code: string) {
+  if (!selectedLocationID.value) return null
+  const params = new URLSearchParams({
+    location_id: selectedLocationID.value,
+    q: code,
+    page: '1',
+    page_size: '120',
+  })
+  const result = await apiClient<POSProductPage | POSProduct[]>(`/v1/pos/products?${params.toString()}`)
+  const candidates = Array.isArray(result) ? result : result.items
+  return candidates.find((item) => item.barcode === code || item.sku.toLowerCase() === code.toLowerCase()) ?? null
 }
 
 function addProduct(product: POSProduct) {
@@ -129,12 +195,13 @@ function addProduct(product: POSProduct) {
   if (cart.paymentMethod === 'CASH' && cart.receivedAmount < cart.totalAmount) cart.setReceivedAmount(cart.totalAmount)
 }
 
-function addBarcode() {
+async function addBarcode() {
   const code = barcodeInput.value.trim()
   if (!code) return
-  const product = products.value.find((item) => item.barcode === code || item.sku.toLowerCase() === code.toLowerCase())
+  const product = products.value.find((item) => item.barcode === code || item.sku.toLowerCase() === code.toLowerCase()) ?? await findBarcodeProduct(code)
   if (!product) {
     search.value = code
+    productPage.value = 1
     scheduleLoadProducts()
     error.value = app.t('pos.productNotFoundDescription')
     app.pushToast({ type: 'warning', message: app.t('pos.productNotFound'), description: code })
@@ -207,7 +274,7 @@ async function openScanner() {
       const codes = await detector.detect(videoRef.value).catch(() => [])
       if (codes[0]?.rawValue) {
         barcodeInput.value = codes[0].rawValue
-        addBarcode()
+        await addBarcode()
         closeScanner()
         return
       }
@@ -228,7 +295,23 @@ function closeScanner() {
   }
 }
 
-watch([selectedLocationID, search], scheduleLoadProducts)
+watch(selectedLocationID, () => {
+  productPage.value = 1
+  scheduleLoadProducts()
+})
+watch(selectedCategoryID, () => {
+  productPage.value = 1
+  scheduleLoadProducts()
+})
+watch(search, () => {
+  productPage.value = 1
+  scheduleLoadProducts()
+})
+watch(productPageSize, () => {
+  productPage.value = 1
+  scheduleLoadProducts()
+})
+watch(productPage, scheduleLoadProducts)
 watch(() => cart.paymentMethod, (method) => {
   if (method === 'QR') cart.setReceivedAmount(cart.totalAmount)
 })
@@ -240,7 +323,7 @@ watch(() => cart.totalAmount, (total) => {
 onMounted(async () => {
   window.addEventListener('beforeprint', handleBeforePrint)
   window.addEventListener('afterprint', handleAfterPrint)
-  await loadLocations()
+  await Promise.all([loadLocations(), loadCategories()])
   await loadProducts()
 })
 
@@ -293,8 +376,15 @@ onBeforeUnmount(() => {
         <div v-else class="grid gap-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300 mb-1 mt-3">{{ app.t('pos.productsTitle') }}</p>
+              <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300 mb-1">{{ app.t('pos.productsTitle') }}</p>
               <p class="text-sm text-slate-500 dark:text-slate-400">{{ productCountLabel }}</p>
+            </div>
+            <div class="grid min-w-36 gap-1">
+              <AppSelect :model-value="productPageSize" :label="app.t('pos.pageSize')" hide-arrow @update:model-value="setProductPageSize">
+                <option :value="12">12</option>
+                <option :value="24">24</option>
+                <option :value="48">48</option>
+              </AppSelect>
             </div>
           </div>
 
@@ -334,6 +424,14 @@ onBeforeUnmount(() => {
                 </AppButton>
               </div>
             </article>
+          </div>
+
+          <div class="flex flex-col gap-3 rounded-2xl bg-white/80 p-3 shadow-sm dark:bg-slate-950/60 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-center text-sm font-bold text-slate-600 dark:text-slate-300 sm:text-left">{{ productPageLabel }}</p>
+            <div class="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+              <AppButton variant="secondary" icon="chevron-left" :disabled="productPage <= 1 || loading" @click="previousProductPage">{{ app.t('pos.previous') }}</AppButton>
+              <AppButton variant="secondary" icon="chevron-right" :disabled="productPage >= productTotalPages || loading" @click="nextProductPage">{{ app.t('pos.next') }}</AppButton>
+            </div>
           </div>
         </div>
       </div>
@@ -460,5 +558,9 @@ onBeforeUnmount(() => {
 
 .overflow-wrap-anywhere {
   overflow-wrap: anywhere;
+}
+
+.pos-category-shelf {
+  scrollbar-width: thin;
 }
 </style>

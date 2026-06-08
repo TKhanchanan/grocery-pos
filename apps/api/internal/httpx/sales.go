@@ -19,6 +19,8 @@ type POSProduct struct {
 	SKU          string     `json:"sku"`
 	Name         string     `json:"name"`
 	Barcode      *string    `json:"barcode"`
+	CategoryID   *uint64    `json:"category_id"`
+	CategoryName *string    `json:"category_name"`
 	ImageURL     *string    `json:"image_url"`
 	ImageUpdated *time.Time `json:"image_updated_at"`
 	SellingPrice float64    `json:"selling_price"`
@@ -29,6 +31,21 @@ type POSProduct struct {
 	LocationID   uint64     `json:"location_id"`
 	Stock        int        `json:"stock"`
 	StockStatus  string     `json:"stock_status"`
+}
+
+type POSProductPage struct {
+	Items      []POSProduct `json:"items"`
+	Total      int          `json:"total"`
+	Page       int          `json:"page"`
+	PageSize   int          `json:"page_size"`
+	TotalPages int          `json:"total_pages"`
+}
+
+type POSCategory struct {
+	ID     uint64 `json:"id"`
+	Name   string `json:"name"`
+	Active bool   `json:"is_active"`
+	Count  int    `json:"count"`
 }
 
 type SaleInput struct {
@@ -45,6 +62,36 @@ type SaleInputItem struct {
 
 type CancelSaleInput struct {
 	Reason string `json:"reason"`
+}
+
+func (s *Server) posCategories(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.db.QueryContext(r.Context(), `
+		SELECT c.id, c.name, c.active, COUNT(p.id)
+		FROM categories c
+		LEFT JOIN products p ON p.category_id=c.id AND p.active=TRUE
+		WHERE c.active=TRUE
+		GROUP BY c.id, c.name, c.active
+		ORDER BY c.name`)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load POS categories.")
+		return
+	}
+	defer rows.Close()
+
+	categories := []POSCategory{}
+	for rows.Next() {
+		var item POSCategory
+		if err := rows.Scan(&item.ID, &item.Name, &item.Active, &item.Count); err != nil {
+			response.ErrorJSON(w, http.StatusInternalServerError, "SCAN_FAILED", "Could not read POS categories.")
+			return
+		}
+		categories = append(categories, item)
+	}
+	if err := rows.Err(); err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "SCAN_FAILED", "Could not read POS categories.")
+		return
+	}
+	response.JSON(w, http.StatusOK, categories)
 }
 
 type Receipt struct {
@@ -90,7 +137,7 @@ func (s *Server) posProducts(w http.ResponseWriter, r *http.Request) {
 		response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", "location_id is required.")
 		return
 	}
-	products, err := s.listPOSProducts(r.Context(), locationID, strings.TrimSpace(r.URL.Query().Get("q")))
+	products, err := s.listPOSProducts(r.Context(), r, locationID)
 	if err != nil {
 		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load POS products.")
 		return
@@ -177,7 +224,16 @@ func (s *Server) cancelSale(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, receipt)
 }
 
-func (s *Server) listPOSProducts(ctx context.Context, locationID uint64, query string) ([]POSProduct, error) {
+func (s *Server) listPOSProducts(ctx context.Context, r *http.Request, locationID uint64) (POSProductPage, error) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	categoryID := strings.TrimSpace(r.URL.Query().Get("category_id"))
+	page := positiveQueryInt(r, "page", 1)
+	pageSize := positiveQueryInt(r, "page_size", 12)
+	if pageSize > 120 {
+		pageSize = 120
+	}
+	offset := (page - 1) * pageSize
+
 	where := []string{"p.active=TRUE", "l.active=TRUE", "l.id=?"}
 	args := []any{locationID}
 	if query != "" {
@@ -185,17 +241,34 @@ func (s *Server) listPOSProducts(ctx context.Context, locationID uint64, query s
 		like := "%" + query + "%"
 		args = append(args, like, like, like)
 	}
+	if categoryID != "" {
+		where = append(where, "p.category_id=?")
+		args = append(args, categoryID)
+	}
+
+	var total int
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT p.id)
+		FROM products p
+		JOIN locations l ON l.id=?
+		LEFT JOIN product_stocks ps ON ps.product_id=p.id AND ps.location_id=l.id
+		LEFT JOIN categories c ON c.id=p.category_id
+		WHERE `+strings.Join(where, " AND "), append([]any{locationID}, args...)...).Scan(&total); err != nil {
+		return POSProductPage{}, err
+	}
+
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT p.id, p.sku, p.name, p.barcode, p.image_url, p.image_updated_at, p.price, p.cost, p.unit, p.threshold, p.reorder_point,
+		SELECT p.id, p.sku, p.name, p.barcode, p.category_id, c.name, p.image_url, p.image_updated_at, p.price, p.cost, p.unit, p.threshold, p.reorder_point,
 		       l.id, COALESCE(ps.quantity, 0)
 		FROM products p
 		JOIN locations l ON l.id=?
 		LEFT JOIN product_stocks ps ON ps.product_id=p.id AND ps.location_id=l.id
+		LEFT JOIN categories c ON c.id=p.category_id
 		WHERE `+strings.Join(where, " AND ")+`
 		ORDER BY p.name, p.sku
-		LIMIT 120`, append([]any{locationID}, args...)...)
+		LIMIT ? OFFSET ?`, append(append([]any{locationID}, args...), pageSize, offset)...)
 	if err != nil {
-		return nil, err
+		return POSProductPage{}, err
 	}
 	defer rows.Close()
 
@@ -204,8 +277,17 @@ func (s *Server) listPOSProducts(ctx context.Context, locationID uint64, query s
 		var item POSProduct
 		var imageURL sql.NullString
 		var imageUpdated sql.NullTime
-		if err := rows.Scan(&item.ID, &item.SKU, &item.Name, &item.Barcode, &imageURL, &imageUpdated, &item.SellingPrice, &item.UnitCost, &item.Unit, &item.Threshold, &item.ReorderPoint, &item.LocationID, &item.Stock); err != nil {
-			return nil, err
+		var categoryID sql.NullInt64
+		var categoryName sql.NullString
+		if err := rows.Scan(&item.ID, &item.SKU, &item.Name, &item.Barcode, &categoryID, &categoryName, &imageURL, &imageUpdated, &item.SellingPrice, &item.UnitCost, &item.Unit, &item.Threshold, &item.ReorderPoint, &item.LocationID, &item.Stock); err != nil {
+			return POSProductPage{}, err
+		}
+		if categoryID.Valid {
+			value := uint64(categoryID.Int64)
+			item.CategoryID = &value
+		}
+		if categoryName.Valid {
+			item.CategoryName = &categoryName.String
 		}
 		if imageURL.Valid {
 			item.ImageURL = &imageURL.String
@@ -216,7 +298,20 @@ func (s *Server) listPOSProducts(ctx context.Context, locationID uint64, query s
 		item.StockStatus = stockStatus(item.Stock, item.Threshold, item.ReorderPoint)
 		products = append(products, item)
 	}
-	return products, rows.Err()
+	if err := rows.Err(); err != nil {
+		return POSProductPage{}, err
+	}
+	totalPages := int(math.Ceil(float64(total) / float64(pageSize)))
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	return POSProductPage{
+		Items:      products,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
 }
 
 func (s *Server) listSales(ctx context.Context, r *http.Request) ([]Receipt, error) {

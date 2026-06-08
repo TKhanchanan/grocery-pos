@@ -193,7 +193,7 @@ const salesSeries = computed(() => [
 
 const receiptChartOptions = computed<ApexOptions>(() => ({
   chart: { type: 'bar', toolbar: { show: false }, sparkline: { enabled: true }, animations: { enabled: true, speed: 700 } },
-  colors: [app.isDark ? '#5eead4' : '#0f766e'],
+  colors: [app.isDark ? '#5eead4' : '#5eead4'],
   plotOptions: { bar: { borderRadius: 7, columnWidth: '52%' } },
   tooltip: { y: { formatter: (value) => t('dashboard.chart.receiptTooltip', { count: Number(value).toLocaleString(locale.value) }) } },
 }))

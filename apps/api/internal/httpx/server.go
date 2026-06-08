@@ -77,6 +77,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/stock-transfers/{id}", s.requirePermission(s.stockTransferDetail, "transfers.view"))
 	mux.HandleFunc("POST /api/v1/stock-transfers/{id}/complete", s.requirePermission(s.completeStockTransfer, "transfers.complete"))
 	mux.HandleFunc("POST /api/v1/stock-transfers/{id}/cancel", s.requirePermission(s.cancelStockTransfer, "transfers.cancel"))
+	mux.HandleFunc("GET /api/v1/pos/categories", s.requirePermission(s.posCategories, "pos.view"))
 	mux.HandleFunc("GET /api/v1/pos/products", s.requirePermission(s.posProducts, "pos.view"))
 	mux.HandleFunc("GET /api/v1/sales", s.requirePermission(s.sales, "sales.view"))
 	mux.HandleFunc("POST /api/v1/sales", s.requirePermission(s.sales, "pos.sell"))
