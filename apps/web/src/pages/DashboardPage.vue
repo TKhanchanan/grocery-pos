@@ -15,12 +15,14 @@ import PageHeader from '../components/PageHeader.vue'
 import ProductAvatar from '../components/ProductAvatar.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
+import { useAuthStore } from '../stores/auth'
 import type { DashboardSummary, StockReport, StockStatus } from '../types/navigation'
 import { formatThaiDateTime, thaiLocale } from '../utils/date'
 
 type Period = '7D' | '30D' | 'MONTH'
 
 const app = useAppStore()
+const auth = useAuthStore()
 const summary = ref<DashboardSummary | null>(null)
 const loading = ref(false)
 const error = ref('')
@@ -42,6 +44,11 @@ const stockRiskItems = computed(() => (summary.value?.low_stock_items ?? []).sli
 const recentSales = computed(() => (summary.value?.recent_sales ?? []).slice(0, 6))
 const locale = computed(() => app.language === 'th' ? 'th-TH' : 'en-US')
 const currencySuffix = computed(() => ` ${app.t('dashboard.currency.bahtAmount').replace('{amount}', '').trim()}`)
+const canViewPOS = computed(() => auth.hasPermission('pos.view'))
+const canViewReports = computed(() => auth.hasPermission('reports.view'))
+const canRestock = computed(() => auth.hasPermission('stock.restock'))
+const canViewAlerts = computed(() => auth.hasPermission('alerts.view'))
+const canViewSalesHistory = computed(() => auth.hasPermission('sales.view'))
 
 function t(key: TranslationKey, params: Record<string, string | number> = {}) {
   let text = String(app.t(key))
@@ -287,15 +294,15 @@ onBeforeUnmount(() => {
             <h2 class="mt-2 max-w-2xl text-3xl font-black md:text-4xl">{{ app.t('dashboard.hero.title') }}</h2>
             <p class="mt-3 max-w-2xl text-sm leading-6 text-white/80">{{ app.t('dashboard.hero.description') }}</p>
             <div class="mt-5 flex flex-wrap gap-2">
-              <RouterLink to="/pos"
+              <RouterLink v-if="canViewPOS" to="/pos"
                 class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-black text-brand-700 shadow-lg dark:bg-emerald-200 dark:text-emerald-950">
                 <AppIcon name="shopping-cart" :size="18" />{{ app.t('dashboard.hero.pos') }}
               </RouterLink>
-              <RouterLink to="/reports"
+              <RouterLink v-if="canViewReports" to="/reports"
                 class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 px-4 text-sm font-black text-white hover:bg-white/10">
                 <AppIcon name="chart-column" :size="18" />{{ app.t('dashboard.hero.reports') }}
               </RouterLink>
-              <RouterLink to="/restock"
+              <RouterLink v-if="canRestock" to="/restock"
                 class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 px-4 text-sm font-black text-white hover:bg-white/10">
                 <AppIcon name="package-plus" :size="18" />{{ app.t('dashboard.hero.restock') }}
               </RouterLink>
@@ -375,7 +382,7 @@ onBeforeUnmount(() => {
               <!-- <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.product.eyebrow') }}</p> -->
               <h2 class="text-xl font-black">{{ app.t('dashboard.product.title') }}</h2>
             </div>
-            <RouterLink to="/reports" class="text-sm font-black text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.product.viewReport') }}</RouterLink>
+            <RouterLink v-if="canViewReports" to="/reports" class="text-sm font-black text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.product.viewReport') }}</RouterLink>
           </div>
           <AppEmptyState v-if="summary.top_products.length === 0" class="mt-4" :title="app.t('dashboard.empty.noProductSalesTitle')" :description="app.t('dashboard.empty.noProductSalesDescription')" />
           <div v-else class="mt-5 grid gap-3">
@@ -407,7 +414,7 @@ onBeforeUnmount(() => {
               <!-- <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.inventory.eyebrow') }}</p> -->
               <h2 class="text-xl font-black">{{ app.t('dashboard.inventory.title') }}</h2>
             </div>
-            <RouterLink to="/alerts" class="text-sm font-black text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.inventory.openAlerts') }}</RouterLink>
+            <RouterLink v-if="canViewAlerts" to="/alerts" class="text-sm font-black text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.inventory.openAlerts') }}</RouterLink>
           </div>
           <AppEmptyState v-if="stockRiskItems.length === 0" class="mt-4" :title="app.t('dashboard.empty.stockHealthyTitle')" :description="app.t('dashboard.empty.stockHealthyDescription')" />
           <div v-else class="mt-5 grid gap-3">
@@ -444,7 +451,7 @@ onBeforeUnmount(() => {
               <!-- <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.activity.eyebrow') }}</p> -->
               <h2 class="text-xl font-black">{{ app.t('dashboard.activity.title') }}</h2>
             </div>
-            <RouterLink to="/sales-history" class="text-sm font-black text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.activity.viewAll') }}</RouterLink>
+            <RouterLink v-if="canViewSalesHistory" to="/sales-history" class="text-sm font-black text-brand-700 dark:text-emerald-300">{{ app.t('dashboard.activity.viewAll') }}</RouterLink>
           </div>
           <AppEmptyState v-if="recentSales.length === 0" class="mt-4" :title="app.t('dashboard.empty.noSalesTitle')" :description="app.t('dashboard.empty.noSalesDescription')" />
           <div v-else class="mt-5 grid gap-3">
