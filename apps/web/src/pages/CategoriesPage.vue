@@ -235,11 +235,19 @@ onMounted(load)
                   <td class="px-3 py-3">
                     <AppBadge :tone="item.is_active ? 'success' : 'neutral'">{{ item.is_active ? app.t('categories.active') : app.t('categories.inactive') }}</AppBadge>
                   </td>
-                  <td class="px-3 py-3 text-right">
+                  <td class="w-[168px] px-3 py-3 text-right">
                     <div class="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
-                      <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('categories.edit')" :aria-label="app.t('categories.edit')" @click="openEdit(item)" />
-                      <AppButton v-if="canDeactivate" :variant="item.is_active ? 'danger' : 'secondary'" @click="requestStatusChange(item)">
-                        {{ item.is_active ? app.t('categories.deactivate') : app.t('categories.activate') }}
+                      <AppButton v-if="canUpdate"
+                        class="!box-border !h-10 !min-h-10 !w-10 !min-w-10 !shrink-0 !px-0 !py-0" variant="secondary"
+                        icon="settings" :title="app.t('categories.edit')" :aria-label="app.t('categories.edit')"
+                        @click="openEdit(item)" />
+
+                      <AppButton v-if="canDeactivate"
+                        class="!box-border !h-10 !min-h-10 !w-[112px] !min-w-[112px] !shrink-0 !px-3 !py-0 !leading-none"
+                        :variant="item.is_active ? 'danger' : 'secondary'" @click="requestStatusChange(item)">
+                        <span class="block w-full truncate text-center">
+                          {{ item.is_active ? app.t('categories.deactivate') : app.t('categories.activate') }}
+                        </span>
                       </AppButton>
                     </div>
                   </td>
