@@ -998,7 +998,7 @@ onBeforeUnmount(() => {
       </div>
     </AppModal>
 
-    <AppModal :open="cameraOpen" :title="app.t('products.cameraTitle')" :close-label="app.t('products.cancel')" @close="closeCameraScanner">
+    <AppModal :open="cameraOpen" :title="app.t('products.cameraTitle')" size="xl" :close-label="app.t('products.cancel')" @close="closeCameraScanner">
       <div class="grid gap-3">
         <video ref="videoRef" class="aspect-video w-full rounded-lg bg-slate-950 object-cover" muted playsinline />
         <p class="text-sm text-slate-600 dark:text-slate-300">{{ cameraMessage }}</p>

@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <AppModal :open="scannerOpen" :title="app.t('pos.cameraTitle')" @close="closeScanner">
+    <AppModal :open="scannerOpen" :title="app.t('pos.cameraTitle')" size="xl" @close="closeScanner">
       <div class="grid gap-3">
         <video ref="videoRef" class="aspect-video w-full rounded-lg bg-slate-950 object-cover" muted playsinline />
         <p class="text-sm text-slate-600 dark:text-slate-300">{{ scannerMessage }}</p>
