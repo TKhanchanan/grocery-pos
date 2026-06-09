@@ -289,7 +289,7 @@ func (s *Server) adjustStock(ctx context.Context, user User, productID uint64, b
 		}
 		after := before + body.Quantity
 		if after < 0 {
-			return errors.New("stock cannot become negative")
+			return errors.New("insufficient stock")
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE product_stocks SET quantity=? WHERE product_id=? AND location_id=?`, after, productID, body.LocationID); err != nil {
 			return err
@@ -366,14 +366,14 @@ func (s *Server) stockMovementByID(ctx context.Context, id uint64) (StockMovemen
 }
 
 func stockErrorCode(err error) string {
-	if err.Error() == "stock cannot become negative" {
-		return "NEGATIVE_STOCK"
+	if err.Error() == "insufficient stock" {
+		return "INSUFFICIENT_STOCK"
 	}
 	return "STOCK_VALIDATION_FAILED"
 }
 
 func stockErrorStatus(err error) int {
-	if err.Error() == "stock cannot become negative" {
+	if err.Error() == "insufficient stock" {
 		return http.StatusConflict
 	}
 	return http.StatusBadRequest

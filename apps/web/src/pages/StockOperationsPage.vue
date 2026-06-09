@@ -5,6 +5,7 @@ import { apiClient, postJSON } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
+import AppDateRangeFilter from '../components/AppDateRangeFilter.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
@@ -44,6 +45,8 @@ const router = useRouter()
 
 const products = ref<Product[]>([])
 const locations = ref<Location[]>([])
+const movementProducts = ref<Product[]>([])
+const movementLocations = ref<Location[]>([])
 const stocks = ref<ProductStock[]>([])
 const movements = ref<StockMovement[]>([])
 const latestMovement = ref<StockMovement | null>(null)
@@ -52,6 +55,7 @@ const loadingMovements = ref(false)
 const submitting = ref(false)
 const adjustSubmitting = ref(false)
 const error = ref('')
+const adjustError = ref('')
 const movementError = ref('')
 const adjustOpen = ref(false)
 const restockConfirmOpen = ref(false)
@@ -73,6 +77,14 @@ const form = reactive({
 const adjustment = reactive({
   quantity: -1,
   note: '',
+})
+
+const movementFilters = reactive({
+  product_id: '',
+  location_id: '',
+  type: '',
+  date_from: '',
+  date_to: '',
 })
 
 const canRestock = computed(() => auth.hasPermission('stock.restock'))
@@ -150,6 +162,9 @@ function movementLabel(type: string) {
 function friendlyError(err: unknown, fallback: TranslationKey) {
   const message = err instanceof Error ? err.message : app.t(fallback)
   if (message.toLowerCase().includes('permission')) return app.t('stockOps.noPermission')
+  if (message.toLowerCase().includes('insufficient stock') || message.toLowerCase().includes('stock cannot become negative')) {
+    return app.t('stockOps.insufficientStock')
+  }
   return message
 }
 
@@ -174,15 +189,26 @@ function syncActiveTabFromRoute() {
 function setActiveTab(tab: StockTab) {
   activeTab.value = tab
   router.replace({ path: '/stock-operations', query: { ...route.query, tab } })
-  if (tab === 'movements') loadMovements()
+  if (tab === 'movements') {
+    Object.assign(movementFilters, {
+      product_id: '',
+      location_id: '',
+      type: '',
+      date_from: '',
+      date_to: '',
+    })
+    page.value = 1
+    loadMovements()
+  }
 }
 
 async function loadData() {
-  if (!canUseRestockTab.value) return
   loadingData.value = true
   error.value = ''
   try {
     const options = await apiClient<StockOperationOptions>('/v1/stock-operations/options')
+    movementProducts.value = options.products
+    movementLocations.value = options.locations
     products.value = options.products.filter((product) => product.is_active)
     locations.value = options.locations.filter((location) => location.is_active)
     stocks.value = options.stocks
@@ -201,6 +227,11 @@ async function loadMovements() {
   movementError.value = ''
   try {
     const params = new URLSearchParams({ page: String(page.value), page_size: String(pageSize.value) })
+    if (movementFilters.product_id) params.set('product_id', movementFilters.product_id)
+    if (movementFilters.location_id) params.set('location_id', movementFilters.location_id)
+    if (movementFilters.type) params.set('type', movementFilters.type)
+    if (movementFilters.date_from) params.set('date_from', movementFilters.date_from)
+    if (movementFilters.date_to) params.set('date_to', movementFilters.date_to)
     const result = await apiClient<StockMovementPage>(`/v1/stock-movements?${params.toString()}`)
     movements.value = result.items
     totalMovements.value = result.total
@@ -265,7 +296,7 @@ async function restock() {
 function openAdjust() {
   adjustment.quantity = -1
   adjustment.note = ''
-  error.value = ''
+  adjustError.value = ''
   adjustOpen.value = true
 }
 
@@ -277,14 +308,21 @@ function closeAdjust(force = false) {
 
 function requestAdjustStock() {
   if (Number(adjustment.quantity) === 0) {
-    error.value = app.t('stockOps.adjustQuantityRequired')
+    adjustError.value = app.t('stockOps.adjustQuantityRequired')
+    app.pushToast({ type: 'error', message: app.t('stockOps.adjustFailed'), description: adjustError.value })
+    return
+  }
+  if (Number(adjustment.quantity) < 0 && afterAdjustmentPreview.value < 0) {
+    adjustError.value = app.t('stockOps.insufficientStock')
+    app.pushToast({ type: 'error', message: app.t('stockOps.adjustFailed'), description: adjustError.value })
     return
   }
   if (!adjustment.note.trim()) {
-    error.value = app.t('stockOps.noteRequired')
+    adjustError.value = app.t('stockOps.noteRequired')
+    app.pushToast({ type: 'error', message: app.t('stockOps.adjustFailed'), description: adjustError.value })
     return
   }
-  error.value = ''
+  adjustError.value = ''
   adjustConfirmOpen.value = true
 }
 
@@ -295,7 +333,8 @@ function closeAdjustConfirm() {
 
 async function adjustStock() {
   adjustSubmitting.value = true
-  error.value = ''
+  adjustError.value = ''
+  const productName = selectedProduct.value?.name
   try {
     latestMovement.value = await postJSON<StockMovement>(`/v1/products/${form.product_id}/adjust-stock`, {
       location_id: Number(form.location_id),
@@ -303,16 +342,16 @@ async function adjustStock() {
       note: adjustment.note.trim(),
     })
     adjustConfirmOpen.value = false
-    app.pushToast({ type: 'success', message: app.t('stockOps.adjustSuccess'), description: selectedProduct.value?.name })
     closeAdjust(true)
+    app.pushToast({ type: 'success', message: app.t('stockOps.adjustSuccess'), description: productName })
     await loadData()
     if (canViewMovements.value) {
       page.value = 1
       await loadMovements()
     }
   } catch (err) {
-    error.value = friendlyError(err, 'stockOps.adjustFailed')
-    app.pushToast({ type: 'error', message: app.t('stockOps.adjustFailed'), description: error.value })
+    adjustError.value = friendlyError(err, 'stockOps.adjustFailed')
+    app.pushToast({ type: 'error', message: app.t('stockOps.adjustFailed'), description: adjustError.value })
   } finally {
     adjustSubmitting.value = false
   }
@@ -320,6 +359,23 @@ async function adjustStock() {
 
 function changePageSize(value: number) {
   pageSize.value = value
+  page.value = 1
+  loadMovements()
+}
+
+function applyMovementFilters() {
+  page.value = 1
+  loadMovements()
+}
+
+function resetMovementFilters() {
+  Object.assign(movementFilters, {
+    product_id: '',
+    location_id: '',
+    type: '',
+    date_from: '',
+    date_to: '',
+  })
   page.value = 1
   loadMovements()
 }
@@ -420,18 +476,51 @@ onMounted(async () => {
         </div>
       </div>
 
-      <AppCard v-if="activeTab === 'movements' && canViewMovements" class="dark:bg-slate-900/80">
+      <div v-if="activeTab === 'movements' && canViewMovements" class="grid min-w-0 gap-4">
+        <AppCard :padded="false" class="min-w-0 p-3 dark:bg-slate-900/80 sm:p-4">
+          <div class="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(170px,1.1fr)_minmax(140px,0.75fr)_minmax(160px,0.85fr)_minmax(300px,1.45fr)_auto] xl:items-end">
+            <AppSelect v-model="movementFilters.product_id" :label="app.t('stockOps.filterProduct')">
+              <option value="">{{ app.t('stockOps.allProducts') }}</option>
+              <option v-for="product in movementProducts" :key="product.id" :value="String(product.id)">{{ product.name }} · {{ product.sku }}</option>
+            </AppSelect>
+            <AppSelect v-model="movementFilters.location_id" :label="app.t('stockOps.filterLocation')">
+              <option value="">{{ app.t('stockOps.allLocations') }}</option>
+              <option v-for="location in movementLocations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
+            </AppSelect>
+            <AppSelect v-model="movementFilters.type" :label="app.t('stockOps.filterMovementType')">
+              <option value="">{{ app.t('stockOps.allMovementTypes') }}</option>
+              <option v-for="type in ['RESTOCK', 'ADJUSTMENT', 'SALE', 'CANCEL_SALE', 'PO_RECEIVE', 'TRANSFER_IN', 'TRANSFER_OUT', 'IMPORT', 'SEED']" :key="type" :value="type">{{ movementLabel(type) }}</option>
+            </AppSelect>
+            <AppDateRangeFilter
+              class="sm:col-span-2 lg:col-span-2 xl:col-span-1"
+              v-model:date-from="movementFilters.date_from"
+              v-model:date-to="movementFilters.date_to"
+              :date-from-label="app.t('stockOps.dateFrom')"
+              :date-to-label="app.t('stockOps.dateTo')"
+              :date-placeholder="app.t('stockOps.selectDate')"
+              :today-label="app.t('stockOps.today')"
+              :locale="app.language === 'th' ? 'th-TH-u-ca-buddhist' : 'en-US'"
+              :show-shortcuts="false"
+            />
+            <div class="flex items-end gap-2 sm:col-span-2 lg:col-span-1 xl:col-span-1 xl:self-end">
+              <AppButton class="!h-11 !min-h-11 flex-1 !px-3 !py-0 whitespace-nowrap xl:flex-none" icon="search" :disabled="loadingMovements" @click="applyMovementFilters">{{ app.t('stockOps.applyFilters') }}</AppButton>
+              <AppButton class="!h-11 !min-h-11 flex-1 !px-3 !py-0 whitespace-nowrap xl:flex-none" variant="secondary" icon="x" :disabled="loadingMovements" @click="resetMovementFilters">{{ app.t('stockOps.resetFilters') }}</AppButton>
+            </div>
+          </div>
+        </AppCard>
+
+        <AppCard class="min-w-0 overflow-hidden dark:bg-slate-900/80">
         <div v-if="movementError" class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ movementError }}</div>
         <AppLoadingState v-if="loadingMovements" :label="app.t('stockOps.loadingHistory')" />
         <AppEmptyState v-else-if="movements.length === 0" :title="app.t('stockOps.noHistory')" :description="app.t('stockOps.noHistoryDescription')" />
-        <div v-else>
-          <div class="hidden overflow-x-auto md:block">
-            <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+        <div v-else class="min-w-0 max-w-full">
+          <div class="hidden w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable] md:block">
+            <table class="w-full min-w-[1120px] divide-y divide-slate-200 text-sm dark:divide-slate-800">
               <thead class="bg-slate-50 dark:bg-slate-950/70">
                 <tr>
-                  <th class="px-3 py-3 text-left">{{ app.t('stockOps.time') }}</th>
+                  <th class="whitespace-nowrap px-3 py-3 text-left">{{ app.t('stockOps.time') }}</th>
                   <th class="px-3 py-3 text-left">{{ app.t('stockOps.product') }}</th>
-                  <th class="px-3 py-3 text-left">{{ app.t('stockOps.location') }}</th>
+                  <th class="whitespace-nowrap px-3 py-3 text-left">{{ app.t('stockOps.location') }}</th>
                   <th class="px-3 py-3 text-left">{{ app.t('stockOps.type') }}</th>
                   <th class="px-3 py-3 text-right">{{ app.t('stockOps.change') }}</th>
                   <th class="px-3 py-3 text-right">{{ app.t('stockOps.before') }}</th>
@@ -441,7 +530,7 @@ onMounted(async () => {
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                 <tr v-for="movement in movements" :key="movement.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
-                  <td class="px-3 py-3">{{ formatAppDateTime(movement.created_at, app.language) }}</td>
+                  <td class="whitespace-nowrap px-3 py-3">{{ formatAppDateTime(movement.created_at, app.language) }}</td>
                   <td class="px-3 py-3">
                     <div class="flex min-w-0 items-center gap-3">
                       <ProductAvatar :src="movementImageURL(movement)" :updated-at="movementImageUpdatedAt(movement)" :name="movement.product_name" size="sm" shape="square" />
@@ -451,7 +540,7 @@ onMounted(async () => {
                       </div>
                     </div>
                   </td>
-                  <td class="px-3 py-3">{{ movement.location_name }}</td>
+                  <td class="whitespace-nowrap px-3 py-3">{{ movement.location_name }}</td>
                   <td class="px-3 py-3"><AppBadge :tone="movementTone(movement.reference_type)">{{ movementLabel(movement.reference_type) }}</AppBadge></td>
                   <td class="px-3 py-3 text-right font-black" :class="movement.quantity_change < 0 ? 'text-red-600 dark:text-red-300' : 'text-brand-700 dark:text-emerald-200'">{{ signed(movement.quantity_change) }}</td>
                   <td class="px-3 py-3 text-right">{{ movement.before_stock }}</td>
@@ -497,7 +586,8 @@ onMounted(async () => {
             </div>
           </div>
         </div>
-      </AppCard>
+        </AppCard>
+      </div>
     </div>
 
     <AppModal :open="adjustOpen" :title="app.t('stockOps.adjustTitle')" :description="app.t('stockOps.adjustDescription')" @close="closeAdjust">
@@ -508,6 +598,7 @@ onMounted(async () => {
         </div>
         <AppInput v-model="adjustment.quantity" :label="app.t('stockOps.quantity')" type="number" :placeholder="app.t('stockOps.adjustQuantityPlaceholder')" />
         <AppTextarea v-model="adjustment.note" :label="app.t('stockOps.note')" :placeholder="app.t('stockOps.adjustNotePlaceholder')" />
+        <div v-if="adjustError" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ adjustError }}</div>
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <AppButton type="button" variant="secondary" :disabled="adjustSubmitting" @click="closeAdjust">{{ app.t('stockOps.cancel') }}</AppButton>
           <AppButton type="submit" :loading="adjustSubmitting" :disabled="adjustSubmitting">{{ app.t('stockOps.submitAdjustment') }}</AppButton>

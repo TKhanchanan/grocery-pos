@@ -69,7 +69,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/locations/{id}", s.requirePermission(s.locationDetail, "locations.update"))
 	mux.HandleFunc("PATCH /api/v1/locations/{id}/status", s.requirePermission(s.locationStatus, "locations.deactivate"))
 	mux.HandleFunc("GET /api/v1/product-stocks", s.requirePermission(s.productStocks, "stock.view"))
-	mux.HandleFunc("GET /api/v1/stock-operations/options", s.requireAnyPermission(s.stockOperationOptions, "stock.restock", "stock.adjust"))
+	mux.HandleFunc("GET /api/v1/stock-operations/options", s.requireAnyPermission(s.stockOperationOptions, "stock.restock", "stock.adjust", "stock.movements.view"))
 	mux.HandleFunc("GET /api/v1/stock-movements", s.requirePermission(s.stockMovements, "stock.movements.view"))
 	mux.HandleFunc("GET /api/v1/stock-transfers/options", s.requireAnyPermission(s.stockTransferOptions, "transfers.view", "transfers.create"))
 	mux.HandleFunc("GET /api/v1/stock-transfers", s.requirePermission(s.stockTransfers, "transfers.view"))
