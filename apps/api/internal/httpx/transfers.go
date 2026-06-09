@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"grocery-pos/apps/api/internal/response"
@@ -97,7 +98,7 @@ func (s *Server) stockTransfers(w http.ResponseWriter, r *http.Request) {
 		if pageSize != 10 && pageSize != 20 && pageSize != 50 {
 			pageSize = 20
 		}
-		transfers, total, err := s.listStockTransfers(r.Context(), page, pageSize)
+		transfers, total, err := s.listStockTransfers(r.Context(), r, page, pageSize)
 		if err != nil {
 			response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load stock transfers.")
 			return
@@ -169,9 +170,49 @@ func (s *Server) cancelStockTransfer(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, transfer)
 }
 
-func (s *Server) listStockTransfers(ctx context.Context, page, pageSize int) ([]StockTransfer, int, error) {
+func (s *Server) listStockTransfers(ctx context.Context, r *http.Request, page, pageSize int) ([]StockTransfer, int, error) {
+	where := []string{"1=1"}
+	args := []any{}
+	query := r.URL.Query()
+	if value := strings.TrimSpace(query.Get("search")); value != "" {
+		like := "%" + value + "%"
+		where = append(where, `(st.transfer_no LIKE ? OR st.note LIKE ? OR EXISTS (
+			SELECT 1
+			FROM stock_transfer_items search_sti
+			JOIN products search_p ON search_p.id=search_sti.product_id
+			WHERE search_sti.transfer_id=st.id AND (search_p.name LIKE ? OR search_p.sku LIKE ?)
+		))`)
+		args = append(args, like, like, like, like)
+	}
+	if value := strings.TrimSpace(query.Get("product_id")); value != "" {
+		where = append(where, `EXISTS (
+			SELECT 1 FROM stock_transfer_items product_sti
+			WHERE product_sti.transfer_id=st.id AND product_sti.product_id=?
+		)`)
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("from_location_id")); value != "" {
+		where = append(where, "st.from_location_id=?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("to_location_id")); value != "" {
+		where = append(where, "st.to_location_id=?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("date_from")); value != "" {
+		where = append(where, "st.created_at >= ?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("date_to")); value != "" {
+		where = append(where, "st.created_at < DATE_ADD(?, INTERVAL 1 DAY)")
+		args = append(args, value)
+	}
+
 	var total int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM stock_transfers`).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM stock_transfers st
+		WHERE `+strings.Join(where, " AND "), args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	offset := (page - 1) * pageSize
@@ -181,8 +222,9 @@ func (s *Server) listStockTransfers(ctx context.Context, page, pageSize int) ([]
 		FROM stock_transfers st
 		JOIN locations fl ON fl.id=st.from_location_id
 		JOIN locations tl ON tl.id=st.to_location_id
+		WHERE `+strings.Join(where, " AND ")+`
 		ORDER BY st.id DESC
-		LIMIT ? OFFSET ?`, pageSize, offset)
+		LIMIT ? OFFSET ?`, append(args, pageSize, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}

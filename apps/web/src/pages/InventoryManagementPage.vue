@@ -5,6 +5,7 @@ import { apiClient, patchJSON, postJSON } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
+import AppDateRangeFilter from '../components/AppDateRangeFilter.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
@@ -75,6 +76,17 @@ const pendingTransferAction = ref<TransferAction>('complete')
 const transferPage = ref(1)
 const transferPageSize = ref(20)
 const transferTotal = ref(0)
+const locationPage = ref(1)
+const locationPageSize = ref(20)
+
+const transferFilters = reactive({
+  search: '',
+  product_id: '',
+  from_location_id: '',
+  to_location_id: '',
+  date_from: '',
+  date_to: '',
+})
 
 const locationForm = reactive({
   id: 0,
@@ -108,6 +120,11 @@ const tabs = computed(() => {
   return items
 })
 const totalTransferPages = computed(() => Math.max(1, Math.ceil(transferTotal.value / transferPageSize.value)))
+const totalLocationPages = computed(() => Math.max(1, Math.ceil(locations.value.length / locationPageSize.value)))
+const visibleLocations = computed(() => {
+  const start = (locationPage.value - 1) * locationPageSize.value
+  return locations.value.slice(start, start + locationPageSize.value)
+})
 const selectedProduct = computed(() => activeProducts.value.find((product) => product.id === Number(transferForm.product_id)) ?? null)
 const selectedSourceLocation = computed(() => activeLocations.value.find((location) => location.id === Number(transferForm.from_location_id)) ?? null)
 const selectedDestinationLocation = computed(() => activeLocations.value.find((location) => location.id === Number(transferForm.to_location_id)) ?? null)
@@ -182,6 +199,11 @@ function setTransferPageSize(value: number) {
   transferPage.value = 1
 }
 
+function setLocationPageSize(value: number) {
+  locationPageSize.value = value
+  locationPage.value = 1
+}
+
 async function loadActiveTab() {
   if (activeTab.value === 'locations') await loadLocations()
   if (activeTab.value === 'transfers') {
@@ -196,6 +218,7 @@ async function loadLocations() {
   locationError.value = ''
   try {
     locations.value = await apiClient<Location[]>('/v1/locations')
+    locationPage.value = Math.min(locationPage.value, totalLocationPages.value)
   } catch (err) {
     locationError.value = friendlyError(err, 'inventory.locations.loadFailed')
   } finally {
@@ -228,6 +251,9 @@ async function loadTransfers() {
   transferError.value = ''
   try {
     const params = new URLSearchParams({ page: String(transferPage.value), page_size: String(transferPageSize.value) })
+    for (const [key, value] of Object.entries(transferFilters)) {
+      if (value.trim()) params.set(key, value.trim())
+    }
     const result = await apiClient<StockTransferPage>(`/v1/stock-transfers?${params.toString()}`)
     transfers.value = result.items
     transferTotal.value = result.total
@@ -268,6 +294,7 @@ function closeLocationModal(force = false) {
 function requestSaveLocation() {
   if (!locationForm.name.trim()) {
     locationError.value = app.t('inventory.locations.nameRequired')
+    app.pushToast({ type: 'error', message: locationError.value })
     return
   }
   locationError.value = ''
@@ -359,10 +386,35 @@ function requestCreateTransfer() {
   const validation = validateTransfer()
   if (validation) {
     transferError.value = validation
+    app.pushToast({ type: 'error', message: validation })
     return
   }
   transferError.value = ''
   transferSaveConfirmOpen.value = true
+}
+
+async function applyTransferFilters() {
+  if (transferPage.value !== 1) {
+    transferPage.value = 1
+    return
+  }
+  transferPage.value = 1
+  await loadTransfers()
+}
+
+async function resetTransferFilters() {
+  transferFilters.search = ''
+  transferFilters.product_id = ''
+  transferFilters.from_location_id = ''
+  transferFilters.to_location_id = ''
+  transferFilters.date_from = ''
+  transferFilters.date_to = ''
+  if (transferPage.value !== 1) {
+    transferPage.value = 1
+    return
+  }
+  transferPage.value = 1
+  await loadTransfers()
 }
 
 function closeTransferSaveConfirm() {
@@ -485,6 +537,20 @@ watch([transferPage, transferPageSize], () => {
   if (activeTab.value === 'transfers') loadTransfers()
 })
 
+watch(() => transferForm.from_location_id, (sourceID) => {
+  if (!sourceID || sourceID !== transferForm.to_location_id) return
+  transferForm.to_location_id = ''
+  transferError.value = app.t('inventory.transfers.sameLocation')
+  app.pushToast({ type: 'error', message: transferError.value })
+})
+
+watch(() => transferForm.to_location_id, (destinationID) => {
+  if (!destinationID || destinationID !== transferForm.from_location_id) return
+  transferForm.to_location_id = ''
+  transferError.value = app.t('inventory.transfers.sameLocation')
+  app.pushToast({ type: 'error', message: transferError.value })
+})
+
 onMounted(() => {
   document.addEventListener('mousedown', handleDocumentPointerDown)
   window.addEventListener('resize', handleTooltipViewportChange)
@@ -501,12 +567,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <section class="min-w-0 max-w-full space-y-6">
     <PageHeader :title="app.t('inventory.title')" :eyebrow="app.t('inventory.eyebrow')" :description="app.t('inventory.description')" icon="map-pin" />
 
     <AppTabs v-if="tabs.length > 1" :tabs="tabs" :model-value="activeTab" @update:model-value="setActiveTab" />
 
-    <div v-if="activeTab === 'locations'" class=" grid gap-4">
+    <div v-if="activeTab === 'locations'" class="grid min-w-0 max-w-full gap-4">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 class="text-xl font-black text-slate-950 dark:text-slate-50">{{ app.t('inventory.tabs.locations') }}</h2>
@@ -517,52 +583,67 @@ onBeforeUnmount(() => {
           </AppButton>
         </div>
       </div>
-      <AppCard class="dark:bg-slate-900/80">
+      <AppCard class="min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
         <div v-if="locationError" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">{{ locationError }}</div>
         <AppLoadingState v-if="loadingLocations" :label="app.t('inventory.locations.loading')" />
         <AppEmptyState v-else-if="locations.length === 0" :title="app.t('inventory.locations.empty')" :description="app.t('inventory.locations.emptyDescription')" icon="map-pin">
         </AppEmptyState>
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
-            <thead class="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
-              <tr>
-                <th class="px-3 py-3">{{ app.t('inventory.locations.name') }}</th>
-                <th class="px-3 py-3">{{ app.t('inventory.locations.description') }}</th>
-                <th class="px-3 py-3">{{ app.t('inventory.locations.status') }}</th>
-                <th class="px-3 py-3">{{ app.t('inventory.locations.createdAt') }}</th>
-                <th class="px-3 py-3 text-right">{{ app.t('inventory.actions') }}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-              <tr v-for="location in locations" :key="location.id" class="align-top">
-                <td class="px-3 py-3 font-bold text-slate-900 dark:text-slate-50">{{ location.name }}</td>
-                <td class="max-w-md px-3 py-3 text-slate-500 dark:text-slate-300">{{ location.description || '-' }}</td>
-                <td class="px-3 py-3">
-                  <AppBadge :tone="location.is_active ? 'success' : 'neutral'">
-                    {{ location.is_active ? app.t('inventory.status.active') : app.t('inventory.status.inactive') }}
-                  </AppBadge>
-                </td>
-                <td class="px-3 py-3 text-slate-500 dark:text-slate-300">{{ formatDate(location.created_at) }}</td>
-                <td class="px-3 py-3">
-                  <div class="flex justify-end gap-2">
-                    <AppButton v-if="canUpdateLocation" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('inventory.edit')" :aria-label="app.t('inventory.edit')" @click="openEditLocation(location)" />
-                    <AppButton
-                      v-if="canDeactivateLocation"
-                      :variant="location.is_active ? 'danger' : 'secondary'"
-                      @click="confirmLocationStatus(location, !location.is_active)"
-                    >
-                      {{ location.is_active ? app.t('inventory.deactivate') : app.t('inventory.activate') }}
-                    </AppButton>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-else class="min-w-0 max-w-full space-y-4">
+          <div class="w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable]">
+            <table class="w-full min-w-[860px] divide-y divide-slate-200 text-sm dark:divide-slate-700">
+              <thead class="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+                <tr>
+                  <th class="px-3 py-3">{{ app.t('inventory.locations.name') }}</th>
+                  <th class="px-3 py-3">{{ app.t('inventory.locations.description') }}</th>
+                  <th class="px-3 py-3">{{ app.t('inventory.locations.status') }}</th>
+                  <th class="px-3 py-3">{{ app.t('inventory.locations.createdAt') }}</th>
+                  <th class="px-3 py-3 text-right">{{ app.t('inventory.actions') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tr v-for="location in visibleLocations" :key="location.id" class="align-top">
+                  <td class="px-3 py-3 font-bold text-slate-900 dark:text-slate-50">{{ location.name }}</td>
+                  <td class="max-w-md px-3 py-3 text-slate-500 dark:text-slate-300">{{ location.description || '-' }}</td>
+                  <td class="px-3 py-3">
+                    <AppBadge :tone="location.is_active ? 'success' : 'neutral'">
+                      {{ location.is_active ? app.t('inventory.status.active') : app.t('inventory.status.inactive') }}
+                    </AppBadge>
+                  </td>
+                  <td class="px-3 py-3 text-slate-500 dark:text-slate-300">{{ formatDate(location.created_at) }}</td>
+                  <td class="px-3 py-3">
+                    <div class="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
+                      <AppButton v-if="canUpdateLocation" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('inventory.edit')" :aria-label="app.t('inventory.edit')" @click="openEditLocation(location)" />
+                      <AppButton
+                        v-if="canDeactivateLocation"
+                        class="!h-10 !min-h-10 whitespace-nowrap !py-0"
+                        :variant="location.is_active ? 'danger' : 'secondary'"
+                        @click="confirmLocationStatus(location, !location.is_active)"
+                      >
+                        {{ location.is_active ? app.t('inventory.deactivate') : app.t('inventory.activate') }}
+                      </AppButton>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="flex flex-col gap-3 border-t border-slate-100 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('inventory.show') }}</span>
+              <AppPageSizeSelect :model-value="locationPageSize" @update:model-value="setLocationPageSize" />
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('inventory.perPage') }}</span>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+              <span class="font-semibold text-slate-600 dark:text-slate-300">{{ t('inventory.page', { page: locationPage, total: totalLocationPages }) }}</span>
+              <AppButton class="whitespace-nowrap" variant="secondary" :disabled="locationPage <= 1" @click="locationPage--">{{ app.t('inventory.previous') }}</AppButton>
+              <AppButton class="whitespace-nowrap" variant="secondary" :disabled="locationPage >= totalLocationPages" @click="locationPage++">{{ app.t('inventory.next') }}</AppButton>
+            </div>
+          </div>
         </div>
       </AppCard>
     </div>
 
-    <div v-else class=" grid gap-4">
+    <div v-else class="grid min-w-0 max-w-full gap-4">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 class="text-xl font-black text-slate-950 dark:text-slate-50">{{ app.t('inventory.tabs.transfers') }}</h2>
@@ -574,20 +655,60 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="grid gap-3 md:grid-cols-3">
+      <div class="grid min-w-0 max-w-full gap-3 md:grid-cols-3">
         <StatCard :label="app.t('inventory.transfer.status.draft')" :value="transferSummary.draft" :helper="app.t('inventory.transfers.draftHelper')" icon="history" />
         <StatCard :label="app.t('inventory.transfer.status.completed')" :value="transferSummary.completed" :helper="app.t('inventory.transfers.completedHelper')" icon="check-circle" tone="success" />
         <StatCard :label="app.t('inventory.transfer.status.cancelled')" :value="transferSummary.cancelled" :helper="app.t('inventory.transfers.cancelledHelper')" icon="circle-x" tone="danger" />
       </div>
 
-      <AppCard class="dark:bg-slate-900/80">
+      <AppCard class="min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
+        <div class="mb-5 grid min-w-0 max-w-full gap-4">
+          <div class="grid min-w-0 max-w-full gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <AppInput class="min-w-0" v-model="transferFilters.search" :label="app.t('inventory.transfers.search')"
+              :placeholder="app.t('inventory.transfers.searchPlaceholder')" @keyup.enter="applyTransferFilters" />
+            <AppSelect class="min-w-0" v-model="transferFilters.product_id"
+              :label="app.t('inventory.transfers.product')">
+              <option value="">{{ app.t('inventory.transfers.allProducts') }}</option>
+              <option v-for="product in activeProducts" :key="product.id" :value="String(product.id)">{{ product.sku }}
+                - {{ product.name }}</option>
+            </AppSelect>
+            <AppSelect class="min-w-0" v-model="transferFilters.from_location_id"
+              :label="app.t('inventory.transfers.source')">
+              <option value="">{{ app.t('inventory.transfers.allSources') }}</option>
+              <option v-for="location in activeLocations" :key="location.id" :value="String(location.id)">{{
+                location.name }}</option>
+            </AppSelect>
+            <AppSelect class="min-w-0" v-model="transferFilters.to_location_id"
+              :label="app.t('inventory.transfers.destination')">
+              <option value="">{{ app.t('inventory.transfers.allDestinations') }}</option>
+              <option v-for="location in activeLocations" :key="location.id" :value="String(location.id)">{{
+                location.name }}</option>
+            </AppSelect>
+          </div>
+          <div class="grid min-w-0 max-w-full gap-3 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-end">
+            <AppDateRangeFilter class="min-w-0 max-w-full" v-model:date-from="transferFilters.date_from"
+              v-model:date-to="transferFilters.date_to" :date-from-label="app.t('inventory.transfers.dateFrom')"
+              :date-to-label="app.t('inventory.transfers.dateTo')"
+              :date-placeholder="app.t('inventory.transfers.selectDate')"
+              :locale="app.language === 'th' ? 'th-TH-u-ca-buddhist' : 'en-US'" :show-shortcuts="false" />
+            <div class="grid min-w-0 grid-cols-2 gap-2">
+              <AppButton class="w-full whitespace-nowrap" icon="search" @click="applyTransferFilters">{{
+                app.t('inventory.transfers.applyFilters') }}</AppButton>
+              <AppButton class="w-full whitespace-nowrap" variant="secondary" @click="resetTransferFilters">{{
+                app.t('inventory.transfers.resetFilters') }}</AppButton>
+            </div>
+          </div>
+        </div>
+      </AppCard>
+
+      <AppCard class="min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
         <div v-if="transferError" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">{{ transferError }}</div>
         <AppLoadingState v-if="loadingTransfers || loadingOptions" :label="app.t('inventory.transfers.loading')" />
         <AppEmptyState v-else-if="transfers.length === 0" :title="app.t('inventory.transfers.empty')" :description="app.t('inventory.transfers.emptyDescription')" icon="arrow-left-right">
         </AppEmptyState>
-        <div v-else class="space-y-4">
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+        <div v-else class="min-w-0 max-w-full space-y-4">
+          <div class="w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable]">
+            <table class="w-full min-w-[1120px] divide-y divide-slate-200 text-sm dark:divide-slate-700">
               <thead class="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
                 <tr>
                   <th class="px-3 py-3">{{ app.t('inventory.transfers.transferNo') }}</th>
@@ -621,10 +742,10 @@ onBeforeUnmount(() => {
                   </td>
                   <td class="px-3 py-3 text-slate-500 dark:text-slate-300">{{ formatDate(transfer.created_at) }}</td>
                   <td class="px-3 py-3">
-                    <div class="flex justify-end gap-2">
+                    <div class="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
                       <AppButton data-transfer-tooltip-trigger class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="info" :title="app.t('inventory.view')" :aria-label="app.t('inventory.view')" @click="openTransferDetail($event, transfer)" />
-                      <AppButton v-if="transfer.status === 'DRAFT' && canCompleteTransfer" icon="check-circle" @click="confirmTransferAction(transfer, 'complete')">{{ app.t('inventory.transfers.complete') }}</AppButton>
-                      <AppButton v-if="transfer.status === 'DRAFT' && canCancelTransfer" variant="danger" icon="circle-x" @click="confirmTransferAction(transfer, 'cancel')">{{ app.t('inventory.transfers.cancel') }}</AppButton>
+                      <AppButton v-if="transfer.status === 'DRAFT' && canCompleteTransfer" class="!h-10 !min-h-10 whitespace-nowrap !py-0" icon="check-circle" @click="confirmTransferAction(transfer, 'complete')">{{ app.t('inventory.transfers.complete') }}</AppButton>
+                      <AppButton v-if="transfer.status === 'DRAFT' && canCancelTransfer" class="!h-10 !min-h-10 whitespace-nowrap !py-0" variant="danger" icon="circle-x" @click="confirmTransferAction(transfer, 'cancel')">{{ app.t('inventory.transfers.cancel') }}</AppButton>
                     </div>
                   </td>
                 </tr>
@@ -804,5 +925,5 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </Teleport>
-  </div>
+  </section>
 </template>
