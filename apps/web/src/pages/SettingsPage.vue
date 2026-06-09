@@ -7,6 +7,7 @@ import AppCard from '../components/AppCard.vue'
 import AppCheckbox from '../components/AppCheckbox.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import AppSelect from '../components/AppSelect.vue'
 import AppTabs from '../components/AppTabs.vue'
 import AppTextarea from '../components/AppTextarea.vue'
@@ -14,7 +15,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
-import type { AppSettings, LineSettings, Location, NotificationLog } from '../types/navigation'
+import type { AppSettings, LineSettings, Location, NotificationLog, NotificationLogPage } from '../types/navigation'
 import { formatAppDateTime } from '../utils/date'
 
 type SettingsTab = 'shop' | 'receipt' | 'line' | 'accessibility' | 'system'
@@ -24,6 +25,11 @@ const route = useRoute()
 const router = useRouter()
 const locations = ref<Location[]>([])
 const logs = ref<NotificationLog[]>([])
+const logsLoading = ref(false)
+const logsPage = ref(1)
+const logsPageSize = ref(20)
+const logsTotal = ref(0)
+const logsTotalPages = ref(1)
 const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
@@ -121,21 +127,56 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [settings, lineSettings, locationRows, notificationRows] = await Promise.all([
+    const [settings, lineSettings, locationRows] = await Promise.all([
       apiClient<AppSettings>('/v1/settings'),
       apiClient<LineSettings>('/v1/settings/line'),
       apiClient<Location[]>('/v1/locations'),
-      apiClient<NotificationLog[]>('/v1/notification-logs'),
+      loadNotificationLogs(),
     ])
     applySettings(settings)
     applyLineSettings(lineSettings)
     locations.value = locationRows
-    logs.value = notificationRows
   } catch (err) {
     error.value = fallbackError(err, 'settings.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+async function loadNotificationLogs() {
+  logsLoading.value = true
+  try {
+    const params = new URLSearchParams({
+      page: String(logsPage.value),
+      page_size: String(logsPageSize.value),
+    })
+    const result = await apiClient<NotificationLogPage>(`/v1/notification-logs?${params}`)
+    logs.value = result.items
+    logsPage.value = result.page
+    logsPageSize.value = result.page_size
+    logsTotal.value = result.total
+    logsTotalPages.value = Math.max(result.total_pages, 1)
+  } finally {
+    logsLoading.value = false
+  }
+}
+
+async function changeLogsPageSize(value: number) {
+  logsPageSize.value = value
+  logsPage.value = 1
+  await loadNotificationLogs()
+}
+
+async function previousLogsPage() {
+  if (logsPage.value <= 1 || logsLoading.value) return
+  logsPage.value -= 1
+  await loadNotificationLogs()
+}
+
+async function nextLogsPage() {
+  if (logsPage.value >= logsTotalPages.value || logsLoading.value) return
+  logsPage.value += 1
+  await loadNotificationLogs()
 }
 
 function requestSaveSettings(section: 'shop' | 'receipt' | 'system') {
@@ -209,11 +250,12 @@ async function testLine() {
   try {
     await postJSON<NotificationLog>('/v1/settings/line/test', {})
     app.pushToast({ type: 'success', message: app.t('settings.testSent') })
-    logs.value = await apiClient<NotificationLog[]>('/v1/notification-logs')
+    logsPage.value = 1
+    await loadNotificationLogs()
   } catch (err) {
     error.value = fallbackError(err, 'settings.testFailed')
     app.pushToast({ type: 'error', message: app.t('settings.testFailed'), description: error.value })
-    logs.value = await apiClient<NotificationLog[]>('/v1/notification-logs').catch(() => logs.value)
+    await loadNotificationLogs().catch(() => undefined)
   } finally {
     testing.value = false
   }
@@ -352,9 +394,11 @@ onMounted(() => {
       <AppCard v-if="activeTab === 'line'" class="dark:bg-slate-900/80">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <h2 class="font-bold">{{ app.t('settings.notificationLogs') }}</h2>
+          <AppButton variant="secondary" :loading="logsLoading" :disabled="logsLoading" @click="loadNotificationLogs">{{ app.t('settings.refresh') }}</AppButton>
         </div>
-        <p v-if="logs.length === 0" class="mt-4 text-sm text-slate-500 dark:text-slate-400">{{ app.t('settings.noLogs') }}</p>
-        <div v-else class="mt-4 hidden overflow-x-auto md:block">
+        <p v-if="!logsLoading && logs.length === 0" class="mt-4 text-sm text-slate-500 dark:text-slate-400">{{ app.t('settings.noLogs') }}</p>
+        <AppLoadingState v-if="logsLoading && logs.length === 0" class="mt-4" :label="app.t('settings.loading')" />
+        <div v-if="logs.length > 0" class="mt-4 hidden overflow-x-auto md:block">
           <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
             <thead class="bg-slate-50 dark:bg-slate-950/70">
               <tr>
@@ -378,7 +422,7 @@ onMounted(() => {
             </tbody>
           </table>
         </div>
-        <div class="mt-4 grid gap-3 md:hidden">
+        <div v-if="logs.length > 0" class="mt-4 grid gap-3 md:hidden">
           <article v-for="log in logs" :key="log.id" class="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
             <div class="flex items-start justify-between gap-3">
               <div>
@@ -390,6 +434,19 @@ onMounted(() => {
             <p v-if="log.error_message" class="mt-2 text-sm text-red-700">{{ log.error_message }}</p>
             <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{ formatAppDateTime(log.created_at, app.language) }}</p>
           </article>
+        </div>
+        <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-slate-500 dark:text-slate-400">{{ app.t('settings.show') }}</span>
+            <AppPageSizeSelect :model-value="logsPageSize" @update:model-value="changeLogsPageSize" />
+            <span class="text-slate-500 dark:text-slate-400">{{ app.t('settings.perPage') }}</span>
+            <span class="text-slate-500 dark:text-slate-400">{{ app.t('settings.totalRows') }} {{ logsTotal }}</span>
+          </div>
+          <div class="flex items-center justify-end gap-2">
+            <AppButton variant="secondary" :disabled="logsPage <= 1 || logsLoading" @click="previousLogsPage">{{ app.t('settings.previous') }}</AppButton>
+            <span class="font-bold text-slate-600 dark:text-slate-300">{{ t('settings.page', { page: logsPage, total: logsTotalPages }) }}</span>
+            <AppButton variant="secondary" :disabled="logsPage >= logsTotalPages || logsLoading" @click="nextLogsPage">{{ app.t('settings.next') }}</AppButton>
+          </div>
         </div>
       </AppCard>
     </div>

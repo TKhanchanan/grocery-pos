@@ -1,23 +1,30 @@
 package httpx
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"os"
 	"time"
 
 	"grocery-pos/apps/api/internal/config"
+	"grocery-pos/apps/api/internal/line"
 	"grocery-pos/apps/api/internal/middleware"
 	"grocery-pos/apps/api/internal/response"
 )
 
+type linePusher interface {
+	Push(ctx context.Context, token, targetID string, messages ...line.Message) error
+}
+
 type Server struct {
-	cfg config.Config
-	db  *sql.DB
+	cfg        config.Config
+	db         *sql.DB
+	lineClient linePusher
 }
 
 func NewServer(cfg config.Config, db *sql.DB) *Server {
-	return &Server{cfg: cfg, db: db}
+	return &Server{cfg: cfg, db: db, lineClient: line.NewClient(nil)}
 }
 
 func (s *Server) Routes() http.Handler {

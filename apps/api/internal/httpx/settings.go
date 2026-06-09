@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -47,6 +48,14 @@ type NotificationLog struct {
 	ErrorMessage string     `json:"error_message"`
 	SentAt       *time.Time `json:"sent_at"`
 	CreatedAt    time.Time  `json:"created_at"`
+}
+
+type NotificationLogPage struct {
+	Items      []NotificationLog `json:"items"`
+	Total      int               `json:"total"`
+	Page       int               `json:"page"`
+	PageSize   int               `json:"page_size"`
+	TotalPages int               `json:"total_pages"`
 }
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +134,7 @@ func (s *Server) lineSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) testLineNotification(w http.ResponseWriter, r *http.Request) {
-	log, err := s.sendLineNotification(r.Context(), "LINE_TEST", "Grocery POS LINE notification test", map[string]any{"event": "LINE_TEST"}, true)
+	log, err := s.sendTestLineNotification(r.Context())
 	if err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, "LINE_TEST_FAILED", err.Error())
 		return
@@ -134,11 +143,31 @@ func (s *Server) testLineNotification(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) notificationLogs(w http.ResponseWriter, r *http.Request) {
+	page := positiveQueryInt(r, "page", 1)
+	pageSize := positiveQueryInt(r, "page_size", 20)
+	if pageSize != 10 && pageSize != 20 && pageSize != 50 {
+		pageSize = 20
+	}
+
+	var total int
+	if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM notification_logs`).Scan(&total); err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not count notification logs.")
+		return
+	}
+	totalPages := int(math.Ceil(float64(total) / float64(pageSize)))
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	offset := (page - 1) * pageSize
+
 	rows, err := s.db.QueryContext(r.Context(), `
 		SELECT id, channel, recipient, event_type, COALESCE(CAST(payload AS CHAR), ''), status, error_message, sent_at, created_at
 		FROM notification_logs
 		ORDER BY id DESC
-		LIMIT 300`)
+		LIMIT ? OFFSET ?`, pageSize, offset)
 	if err != nil {
 		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load notification logs.")
 		return
@@ -153,7 +182,17 @@ func (s *Server) notificationLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		logs = append(logs, log)
 	}
-	response.JSON(w, http.StatusOK, logs)
+	if err := rows.Err(); err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "SCAN_FAILED", "Could not read notification logs.")
+		return
+	}
+	response.JSON(w, http.StatusOK, NotificationLogPage{
+		Items:      logs,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	})
 }
 
 func (s *Server) loadAppSettings(ctx context.Context, includeToken bool) (AppSettings, error) {

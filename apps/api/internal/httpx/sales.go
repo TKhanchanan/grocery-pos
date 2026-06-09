@@ -479,12 +479,7 @@ func (s *Server) createSale(ctx context.Context, user User, body SaleInput) (Rec
 	if err != nil {
 		return Receipt{}, err
 	}
-	s.notifyEvent(ctx, "SALE_COMPLETED", fmt.Sprintf("Sale completed %s total %.2f", receiptNo, totalAmount), map[string]any{
-		"sale_id":     saleID,
-		"receipt_no":  receiptNo,
-		"location_id": body.LocationID,
-		"total":       totalAmount,
-	})
+	s.notifySaleCompleted(ctx, saleID, body.LocationID, receiptNo, totalAmount, receipt.CreatedAt)
 	for _, productID := range affectedProducts {
 		s.notifyActiveStockAlerts(ctx, productID, body.LocationID)
 	}

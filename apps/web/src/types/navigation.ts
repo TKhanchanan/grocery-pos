@@ -420,3 +420,11 @@ export interface NotificationLog {
   sent_at: string | null
   created_at: string
 }
+
+export interface NotificationLogPage {
+  items: NotificationLog[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}

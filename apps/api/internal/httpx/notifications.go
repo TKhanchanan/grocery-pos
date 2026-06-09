@@ -1,31 +1,39 @@
 package httpx
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
+	"log"
 	"strconv"
 	"strings"
 	"time"
-)
 
-const linePushURL = "https://api.line.me/v2/bot/message/push"
+	"grocery-pos/apps/api/internal/line"
+)
 
 func (s *Server) notifyEvent(ctx context.Context, eventType, message string, payload map[string]any) {
 	_, _ = s.sendLineNotification(ctx, eventType, message, payload, false)
 }
 
+func (s *Server) notifySaleCompleted(ctx context.Context, saleID, locationID uint64, receiptNo string, total float64, saleTime time.Time) {
+	s.notifyEvent(ctx, "SALE_COMPLETED", "Sale completed "+receiptNo+" total "+strconv.FormatFloat(total, 'f', 2, 64), map[string]any{
+		"sale_id":     saleID,
+		"location_id": locationID,
+		"receipt_no":  receiptNo,
+		"total":       total,
+		"sale_time":   saleTime,
+	})
+}
+
 func (s *Server) notifyActiveStockAlerts(ctx context.Context, productID, locationID uint64) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT a.id, a.type, a.message, p.name, l.name
+		SELECT a.id, a.type, a.message, p.name, l.name, ps.quantity, p.reorder_point
 		FROM alerts a
 		JOIN products p ON p.id=a.product_id
 		JOIN locations l ON l.id=a.location_id
+		JOIN product_stocks ps ON ps.product_id=p.id AND ps.location_id=l.id
 		WHERE a.product_id=? AND a.location_id=? AND a.resolved_at IS NULL AND a.read_at IS NULL
 		ORDER BY a.id DESC`, productID, locationID)
 	if err != nil {
@@ -35,17 +43,36 @@ func (s *Server) notifyActiveStockAlerts(ctx context.Context, productID, locatio
 	for rows.Next() {
 		var alertID uint64
 		var alertType, message, productName, locationName string
-		if err := rows.Scan(&alertID, &alertType, &message, &productName, &locationName); err != nil {
+		var quantity, reorderPoint int
+		if err := rows.Scan(&alertID, &alertType, &message, &productName, &locationName, &quantity, &reorderPoint); err != nil {
 			return
 		}
-		s.notifyEvent(ctx, alertType, message, map[string]any{
-			"alert_id":      alertID,
-			"product_id":    productID,
-			"product_name":  productName,
-			"location_id":   locationID,
-			"location_name": locationName,
+		s.notifyStockAlert(ctx, alertType, message, line.StockAlertInput{
+			ProductName:  productName,
+			LocationName: locationName,
+			Quantity:     quantity,
+			ReorderPoint: reorderPoint,
+		}, map[string]any{
+			"alert_id":    alertID,
+			"product_id":  productID,
+			"location_id": locationID,
 		})
 	}
+}
+
+func (s *Server) notifyStockAlert(ctx context.Context, eventType, fallbackText string, input line.StockAlertInput, payload map[string]any) {
+	payload["product_name"] = input.ProductName
+	payload["location_name"] = input.LocationName
+	payload["quantity"] = input.Quantity
+	payload["reorder_point"] = input.ReorderPoint
+	s.notifyEvent(ctx, eventType, fallbackText, payload)
+}
+
+func (s *Server) sendTestLineNotification(ctx context.Context) (*NotificationLog, error) {
+	return s.sendLineNotification(ctx, "LINE_TEST", "GroceryPOS LINE notification test", map[string]any{
+		"event":     "LINE_TEST",
+		"timestamp": time.Now(),
+	}, true)
 }
 
 func (s *Server) sendLineNotification(ctx context.Context, eventType, message string, payload map[string]any, force bool) (*NotificationLog, error) {
@@ -77,43 +104,110 @@ func (s *Server) sendLineNotification(ctx context.Context, eventType, message st
 		return log, nil
 	}
 
-	body, _ := json.Marshal(map[string]any{
-		"to": settings.LineTargetID,
-		"messages": []map[string]string{
-			{"type": "text", "text": message},
-		},
-	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, linePushURL, bytes.NewReader(body))
-	if err != nil {
-		log, logErr := s.logNotification(ctx, "LINE", settings.LineTargetID, eventType, payloadWithMessage(payload, message), "FAILED", err.Error())
-		if force && logErr == nil {
-			return log, err
-		}
-		return log, logErr
+	lineMessage := buildLineMessage(eventType, payload)
+	if lineMessage == nil {
+		lineMessage = line.NewTextMessage(message)
 	}
-	req.Header.Set("Authorization", "Bearer "+settings.LineToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 6 * time.Second}
-	res, err := client.Do(req)
+	err = pushLineMessage(ctx, s.lineClient, settings.LineToken, settings.LineTargetID, eventType, message, lineMessage)
 	if err != nil {
-		log, logErr := s.logNotification(ctx, "LINE", settings.LineTargetID, eventType, payloadWithMessage(payload, message), "FAILED", trimError(err.Error()))
+		notificationLog, logErr := s.logNotification(ctx, "LINE", settings.LineTargetID, eventType, payloadWithMessage(payload, message), "FAILED", trimError(err.Error()))
 		if force && logErr == nil {
-			return log, err
+			return notificationLog, err
 		}
-		return log, logErr
-	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(io.LimitReader(res.Body, 512))
-		errMessage := trimError(fmt.Sprintf("LINE API %d: %s", res.StatusCode, strings.TrimSpace(string(bodyBytes))))
-		log, logErr := s.logNotification(ctx, "LINE", settings.LineTargetID, eventType, payloadWithMessage(payload, message), "FAILED", errMessage)
-		if force && logErr == nil {
-			return log, errors.New(errMessage)
-		}
-		return log, logErr
+		return notificationLog, logErr
 	}
 	return s.logNotification(ctx, "LINE", settings.LineTargetID, eventType, payloadWithMessage(payload, message), "SENT", "")
+}
+
+func pushLineMessage(ctx context.Context, client linePusher, token, targetID, eventType, fallbackText string, message line.Message) error {
+	err := client.Push(ctx, token, targetID, message)
+	if err == nil {
+		return nil
+	}
+	if _, isFlex := message.(line.FlexMessage); !isFlex {
+		return err
+	}
+	log.Printf("LINE Flex notification %s failed, retrying as text: %v", eventType, err)
+	return client.Push(ctx, token, targetID, line.NewTextMessage(fallbackText))
+}
+
+func buildLineMessage(eventType string, payload map[string]any) line.Message {
+	switch eventType {
+	case "SALE_COMPLETED":
+		return line.BuildSaleCompleted(line.SaleCompletedInput{
+			ReceiptNo: stringPayload(payload, "receipt_no"),
+			Total:     floatPayload(payload, "total"),
+			SaleTime:  timePayload(payload, "sale_time"),
+		})
+	case "LOW_STOCK":
+		return line.BuildLowStock(stockAlertPayload(payload))
+	case "OUT_OF_STOCK":
+		return line.BuildOutOfStock(stockAlertPayload(payload))
+	case "REORDER_POINT":
+		return line.BuildReorderPoint(stockAlertPayload(payload))
+	case "LINE_TEST":
+		timestamp := timePayload(payload, "timestamp")
+		if timestamp.IsZero() {
+			timestamp = time.Now()
+		}
+		return line.BuildTestNotification(line.TestNotificationInput{Timestamp: timestamp})
+	default:
+		return nil
+	}
+}
+
+func stockAlertPayload(payload map[string]any) line.StockAlertInput {
+	return line.StockAlertInput{
+		ProductName:  stringPayload(payload, "product_name"),
+		LocationName: stringPayload(payload, "location_name"),
+		Quantity:     intPayload(payload, "quantity"),
+		ReorderPoint: intPayload(payload, "reorder_point"),
+	}
+}
+
+func stringPayload(payload map[string]any, key string) string {
+	value, _ := payload[key].(string)
+	return value
+}
+
+func intPayload(payload map[string]any, key string) int {
+	switch value := payload[key].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case uint64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
+}
+
+func floatPayload(payload map[string]any, key string) float64 {
+	switch value := payload[key].(type) {
+	case float64:
+		return value
+	case float32:
+		return float64(value)
+	case int:
+		return float64(value)
+	default:
+		return 0
+	}
+}
+
+func timePayload(payload map[string]any, key string) time.Time {
+	switch value := payload[key].(type) {
+	case time.Time:
+		return value
+	case string:
+		parsed, _ := time.Parse(time.RFC3339, value)
+		return parsed
+	default:
+		return time.Time{}
+	}
 }
 
 func (s *Server) logNotification(ctx context.Context, channel, recipient, eventType string, payload map[string]any, status, errorMessage string) (*NotificationLog, error) {
