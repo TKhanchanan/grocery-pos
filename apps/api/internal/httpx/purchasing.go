@@ -72,7 +72,7 @@ type PurchaseOrderItem struct {
 func (s *Server) suppliers(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		items, err := s.listSuppliers(r.Context())
+		items, err := s.listSuppliers(r.Context(), r)
 		if err != nil {
 			response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load suppliers.")
 			return
@@ -154,7 +154,7 @@ func (s *Server) supplierStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) purchaseOrders(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		items, err := s.listPurchaseOrders(r.Context())
+		items, err := s.listPurchaseOrders(r.Context(), r)
 		if err != nil {
 			response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not load purchase orders.")
 			return
@@ -247,8 +247,25 @@ func (s *Server) transitionPurchaseOrder(w http.ResponseWriter, r *http.Request,
 	response.JSON(w, http.StatusOK, po)
 }
 
-func (s *Server) listSuppliers(ctx context.Context) ([]Supplier, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, phone, email, address, active, created_at FROM suppliers ORDER BY name`)
+func (s *Server) listSuppliers(ctx context.Context, r *http.Request) ([]Supplier, error) {
+	where := []string{"1=1"}
+	args := []any{}
+	query := r.URL.Query()
+	if value := strings.TrimSpace(query.Get("search")); value != "" {
+		like := "%" + value + "%"
+		where = append(where, "(name LIKE ? OR phone LIKE ? OR email LIKE ? OR address LIKE ?)")
+		args = append(args, like, like, like, like)
+	}
+	if value := strings.TrimSpace(query.Get("status")); value == "active" {
+		where = append(where, "active=TRUE")
+	} else if value == "inactive" {
+		where = append(where, "active=FALSE")
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, phone, email, address, active, created_at
+		FROM suppliers
+		WHERE `+strings.Join(where, " AND ")+`
+		ORDER BY name`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +523,40 @@ func (s *Server) receivePO(ctx context.Context, user User, poID uint64) (Purchas
 	return po, nil
 }
 
-func (s *Server) listPurchaseOrders(ctx context.Context) ([]PurchaseOrder, error) {
+func (s *Server) listPurchaseOrders(ctx context.Context, r *http.Request) ([]PurchaseOrder, error) {
+	where := []string{"1=1"}
+	args := []any{}
+	query := r.URL.Query()
+	if value := strings.TrimSpace(query.Get("search")); value != "" {
+		like := "%" + value + "%"
+		where = append(where, `(po.po_number LIKE ? OR po.note LIKE ? OR EXISTS (
+			SELECT 1
+			FROM purchase_order_items search_poi
+			JOIN products search_p ON search_p.id=search_poi.product_id
+			WHERE search_poi.po_id=po.id AND (search_p.name LIKE ? OR search_p.sku LIKE ?)
+		))`)
+		args = append(args, like, like, like, like)
+	}
+	if value := strings.TrimSpace(query.Get("supplier_id")); value != "" {
+		where = append(where, "po.supplier_id=?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("location_id")); value != "" {
+		where = append(where, "po.location_id=?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("status")); value != "" {
+		where = append(where, "po.status=?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("date_from")); value != "" {
+		where = append(where, "po.created_at >= ?")
+		args = append(args, value)
+	}
+	if value := strings.TrimSpace(query.Get("date_to")); value != "" {
+		where = append(where, "po.created_at < DATE_ADD(?, INTERVAL 1 DAY)")
+		args = append(args, value)
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT po.id, po.po_number, po.supplier_id, s.name, po.location_id, l.name, po.status,
 		       po.total_cost, po.note, po.created_by, po.received_by, po.cancelled_by,
@@ -514,8 +564,9 @@ func (s *Server) listPurchaseOrders(ctx context.Context) ([]PurchaseOrder, error
 		FROM purchase_orders po
 		JOIN suppliers s ON s.id=po.supplier_id
 		JOIN locations l ON l.id=po.location_id
+		WHERE `+strings.Join(where, " AND ")+`
 		ORDER BY po.id DESC
-		LIMIT 200`)
+		LIMIT 200`, args...)
 	if err != nil {
 		return nil, err
 	}

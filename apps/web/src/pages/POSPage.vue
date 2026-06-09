@@ -110,8 +110,6 @@ function paymentLabel(method: string) {
 
 async function loadLocations() {
   locations.value = await apiClient<Location[]>('/v1/locations')
-  const firstActive = locations.value.find((location) => location.is_active) ?? locations.value[0]
-  if (!selectedLocationID.value && firstActive) selectedLocationID.value = String(firstActive.id)
 }
 
 async function loadCategories() {
@@ -120,6 +118,14 @@ async function loadCategories() {
 
 async function loadReceiptProfile() {
   receiptSettings.value = await loadReceiptSettings().catch(() => ({ ...defaultReceiptSettings }))
+}
+
+function selectInitialLocation() {
+  const currentLocation = locations.value.find((location) => location.id === Number(selectedLocationID.value) && location.is_active)
+  if (currentLocation) return
+  const defaultLocation = locations.value.find((location) => location.id === receiptSettings.value.default_location_id && location.is_active)
+  const firstActive = locations.value.find((location) => location.is_active)
+  selectedLocationID.value = defaultLocation || firstActive ? String((defaultLocation ?? firstActive)!.id) : ''
 }
 
 function readProductPage(result: POSProductPage | POSProduct[]) {
@@ -334,6 +340,7 @@ onMounted(async () => {
   window.addEventListener('beforeprint', handleBeforePrint)
   window.addEventListener('afterprint', handleAfterPrint)
   await Promise.all([loadLocations(), loadCategories(), loadReceiptProfile()])
+  selectInitialLocation()
   await loadProducts()
 })
 

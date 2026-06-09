@@ -163,7 +163,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section>
+  <section class="min-w-0 max-w-full">
     <PageHeader :title="app.t('alerts.title')" :eyebrow="app.t('alerts.eyebrow')" :description="app.t('alerts.description')" icon="bell">
       <div class="flex flex-wrap gap-2">
         <!-- <AppButton variant="secondary" icon="history" :loading="loading" @click="loadAlerts">{{ app.t('alerts.tryAgain') }}</AppButton> -->
@@ -171,7 +171,7 @@ onMounted(async () => {
       </div>
     </PageHeader>
 
-    <div class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div class="mb-4 grid min-w-0 max-w-full gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <StatCard :label="app.t('alerts.total')" :value="allCount" :helper="app.t('alerts.totalHelper')" icon="bell" />
       <StatCard :label="app.t('alerts.unread')" :value="unreadCount" :helper="app.t('alerts.unreadHelper')" icon="sparkles" tone="warning" />
       <StatCard :label="alertTypeLabel('LOW_STOCK')" :value="lowStockCount" :helper="app.t('alerts.lowStockHelper')" icon="triangle-alert" tone="warning" />
@@ -179,11 +179,11 @@ onMounted(async () => {
       <StatCard :label="alertTypeLabel('REORDER_POINT')" :value="reorderCount" :helper="app.t('alerts.reorderHelper')" icon="clipboard-list" tone="info" />
     </div>
 
-    <AppCard class="mb-4 dark:bg-slate-900/80">
-      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-end">
-        <div>
+    <AppCard class="mb-4 min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
+      <div class="grid min-w-0 max-w-full gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-end">
+        <div class="min-w-0 max-w-full">
           <p class="text-sm font-black text-slate-700 dark:text-slate-200">{{ app.t('alerts.status') }}</p>
-          <div class="mt-2 flex gap-2 overflow-x-auto pb-1">
+          <div class="mt-2 flex w-full min-w-0 max-w-full flex-nowrap gap-2 overflow-x-auto overscroll-x-contain pb-2">
             <button
               v-for="chip in filterChips"
               :key="chip.value"
@@ -212,11 +212,11 @@ onMounted(async () => {
     <AppLoadingState v-if="loading" class="mb-4" :label="app.t('alerts.loading')" />
     <AppEmptyState v-else-if="visibleAlerts.length === 0" :title="app.t('alerts.empty')" :description="app.t('alerts.emptyDescription')" icon="bell" />
 
-    <div v-else class="grid gap-3">
-      <article v-for="alert in visibleAlerts" :key="alert.id" class="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm transition hover:border-brand-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/80 dark:hover:border-teal-400/40">
+    <div v-else class="grid min-w-0 max-w-full gap-3">
+      <article v-for="alert in visibleAlerts" :key="alert.id" class="min-w-0 max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm transition hover:border-brand-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/80 dark:hover:border-teal-400/40">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div class="flex min-w-0 gap-4">
-            <div class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl" :class="alertIconClass(alert.type)">
+          <div class="flex min-w-0 gap-3 sm:gap-4">
+            <div class="grid h-10 w-10 shrink-0 place-items-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl" :class="alertIconClass(alert.type)">
               <AppIcon :name="alertIcon(alert.type)" :size="22" />
             </div>
             <div class="min-w-0">
@@ -225,8 +225,8 @@ onMounted(async () => {
                 <AppBadge v-if="!alert.read_at" tone="brand">{{ app.t('alerts.unread') }}</AppBadge>
                 <AppBadge v-else tone="neutral">{{ app.t('alerts.read') }}</AppBadge>
               </div>
-              <h2 class="mt-2 text-lg font-black">{{ alert.product_name }}</h2>
-              <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ alertMessage(alert) }}</p>
+              <h2 class="mt-2 break-words text-base font-black sm:text-lg">{{ alert.product_name }}</h2>
+              <p class="mt-1 break-words text-sm text-slate-600 dark:text-slate-300">{{ alertMessage(alert) }}</p>
               <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
                 <span>{{ alert.sku }}</span>
                 <span>{{ alert.location_name }}</span>
@@ -234,17 +234,17 @@ onMounted(async () => {
               </div>
             </div>
           </div>
-          <div class="flex flex-wrap gap-2 lg:justify-end">
-            <RouterLink :to="alert.links.product" class="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:justify-end">
+            <RouterLink :to="alert.links.product" class="focus-ring inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-center text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">
               <AppIcon name="package" :size="16" />{{ app.t('alerts.goToProduct') }}
             </RouterLink>
-            <RouterLink :to="alert.links.restock" class="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">
+            <RouterLink :to="alert.links.restock" class="focus-ring inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-center text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">
               <AppIcon name="package-plus" :size="16" />{{ app.t('alerts.restock') }}
             </RouterLink>
-            <RouterLink v-if="canCreatePO" :to="alert.links.purchase_order" class="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">
+            <RouterLink v-if="canCreatePO" :to="alert.links.purchase_order" class="focus-ring inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-center text-sm font-black text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800">
               <AppIcon name="clipboard-list" :size="16" />{{ app.t('alerts.createPO') }}
             </RouterLink>
-            <AppButton v-if="canMarkRead && !alert.read_at" icon="check-circle" @click="markRead(alert)">{{ app.t('alerts.markRead') }}</AppButton>
+            <AppButton v-if="canMarkRead && !alert.read_at" class="w-full min-w-0 sm:w-auto" icon="check-circle" @click="markRead(alert)">{{ app.t('alerts.markRead') }}</AppButton>
           </div>
         </div>
       </article>

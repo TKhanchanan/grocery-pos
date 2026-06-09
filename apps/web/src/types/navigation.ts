@@ -397,6 +397,7 @@ export interface ReceiptSettings {
   shop_name: string
   shop_phone: string
   shop_address: string
+  default_location_id: number
   receipt_footer: string
 }
 

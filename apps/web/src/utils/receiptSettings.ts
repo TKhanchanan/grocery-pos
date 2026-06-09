@@ -5,6 +5,7 @@ export const defaultReceiptSettings: ReceiptSettings = {
   shop_name: 'Grocery POS',
   shop_phone: '',
   shop_address: '',
+  default_location_id: 0,
   receipt_footer: '',
 }
 

@@ -488,10 +488,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section>
+  <section class="min-w-0 max-w-full">
     <PageHeader :title="app.t('reports.title')" :eyebrow="app.t('reports.eyebrow')" :description="app.t('reports.description')" icon="chart-column" />
 
-    <div class="grid gap-4">
+    <div class="grid min-w-0 max-w-full gap-4">
       <div v-if="hasVisibleReports" class="flex gap-2 overflow-x-auto pb-1">
         <button v-for="tab in visibleTabs" :key="tab.key"
           class="focus-ring inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition"
@@ -502,7 +502,7 @@ onMounted(async () => {
         </button>
       </div>
 
-      <AppCard v-if="hasVisibleReports" class="dark:bg-slate-900/80">
+      <AppCard v-if="hasVisibleReports" class="relative z-20 min-w-0 max-w-full overflow-visible dark:bg-slate-900/80">
         <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p class="text-xs font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('reports.filters') }}</p>
@@ -510,8 +510,9 @@ onMounted(async () => {
           </div>
           <!-- <AppBadge tone="info">{{ app.t('reports.reportCenter') }}</AppBadge> -->
         </div>
-        <div class="grid gap-3" :class="canViewLocations ? 'xl:grid-cols-[minmax(0,3fr)_minmax(220px,1fr)_auto]' : 'xl:grid-cols-[minmax(0,3fr)_auto]'">
+        <div class="grid min-w-0 max-w-full gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(220px,1fr)] xl:items-end">
           <AppDateRangeFilter
+            class="min-w-0 max-w-full xl:col-span-2"
             v-model:date-from="filters.date_from"
             v-model:date-to="filters.date_to"
             v-model:month="filters.month"
@@ -526,13 +527,15 @@ onMounted(async () => {
             :disabled="isStockReport"
             show-month
           />
-          <AppSelect v-if="canViewLocations" v-model="filters.location_id" :label="app.t('reports.location')">
-            <option value="">{{ app.t('reports.allLocations') }}</option>
-            <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
-          </AppSelect>
-          <div class="flex items-end gap-2">
-            <AppButton class="flex-1 xl:flex-none" icon="search" @click="loadReport">{{ app.t('reports.apply') }}</AppButton>
-            <AppButton class="flex-1 xl:flex-none" variant="secondary" icon="x" @click="clearFilters">{{ app.t('reports.reset') }}</AppButton>
+          <div class="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end xl:col-span-2">
+            <AppSelect v-if="canViewLocations" v-model="filters.location_id" :label="app.t('reports.location')">
+              <option value="">{{ app.t('reports.allLocations') }}</option>
+              <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
+            </AppSelect>
+            <div class="grid grid-cols-2 gap-2 md:min-w-64" :class="{ 'md:justify-self-start': !canViewLocations }">
+              <AppButton class="w-full whitespace-nowrap" icon="search" @click="loadReport">{{ app.t('reports.apply') }}</AppButton>
+              <AppButton class="w-full whitespace-nowrap" variant="secondary" icon="x" @click="clearFilters">{{ app.t('reports.reset') }}</AppButton>
+            </div>
           </div>
         </div>
       </AppCard>

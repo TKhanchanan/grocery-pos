@@ -55,18 +55,18 @@ const dayNames = computed(() => {
 
 const rootClass = computed(() => {
   if (props.showMonth && props.showShortcuts) {
-    return 'grid w-full gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]'
+    return 'grid w-full min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]'
   }
 
   if (props.showMonth && !props.showShortcuts) {
-    return 'grid w-full gap-3 md:grid-cols-2 xl:grid-cols-3'
+    return 'grid w-full min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-3'
   }
 
   if (!props.showMonth && props.showShortcuts) {
-    return 'grid w-full gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+    return 'grid w-full min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
   }
 
-  return 'grid w-full gap-3 md:grid-cols-2'
+  return 'grid w-full min-w-0 gap-3 md:grid-cols-2'
 })
 
 const calendarTitle = computed(() => new Intl.DateTimeFormat(props.locale, { month: 'short', year: 'numeric' }).format(new Date(viewYear.value, viewMonth.value, 1)))
@@ -220,7 +220,7 @@ function fieldClass(active: boolean) {
         <span>{{ formatDate(dateFrom) }}</span>
         <AppIcon name="calendar" :size="17" />
       </button>
-      <div v-if="openPicker === 'from'" class="absolute left-0 top-full z-[110] mt-2 w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-white p-3 shadow-2xl shadow-slate-950/20 dark:bg-slate-900 dark:shadow-black/35">
+      <div v-if="openPicker === 'from'" class="absolute left-0 top-full z-[230] mt-2 w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-white p-3 shadow-2xl shadow-slate-950/20 dark:bg-slate-900 dark:shadow-black/35">
         <div class="flex items-center justify-between gap-2">
           <button type="button" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200" @click="previousMonth"><AppIcon name="chevron-left" :size="17" /></button>
           <p class="font-black text-slate-900 dark:text-slate-50">{{ calendarTitle }}</p>
@@ -243,7 +243,7 @@ function fieldClass(active: boolean) {
         <span>{{ formatDate(dateTo) }}</span>
         <AppIcon name="calendar" :size="17" />
       </button>
-      <div v-if="openPicker === 'to'" class="absolute left-0 top-full z-[110] mt-2 w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-white p-3 shadow-2xl shadow-slate-950/20 dark:bg-slate-900 dark:shadow-black/35">
+      <div v-if="openPicker === 'to'" class="absolute left-0 top-full z-[230] mt-2 w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-white p-3 shadow-2xl shadow-slate-950/20 dark:bg-slate-900 dark:shadow-black/35">
         <div class="flex items-center justify-between gap-2">
           <button type="button" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200" @click="previousMonth"><AppIcon name="chevron-left" :size="17" /></button>
           <p class="font-black text-slate-900 dark:text-slate-50">{{ calendarTitle }}</p>
@@ -266,7 +266,7 @@ function fieldClass(active: boolean) {
         <span class="min-w-0 truncate">{{ formatMonth(month) }}</span>
         <AppIcon name="calendar" :size="17" class="shrink-0" />
       </button>
-      <div v-if="openPicker === 'month'" class="absolute left-0 top-full z-[110] mt-2 w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-white p-3 shadow-2xl shadow-slate-950/20 dark:bg-slate-900 dark:shadow-black/35">
+      <div v-if="openPicker === 'month'" class="absolute left-0 top-full z-[230] mt-2 w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-white p-3 shadow-2xl shadow-slate-950/20 dark:bg-slate-900 dark:shadow-black/35">
         <div class="flex items-center justify-between gap-2">
           <button type="button" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200" @click="viewYear -= 1"><AppIcon name="chevron-left" :size="17" /></button>
           <p class="font-black text-slate-900 dark:text-slate-50">{{ monthTitle }}</p>

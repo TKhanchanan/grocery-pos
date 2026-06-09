@@ -188,9 +188,30 @@ function syncActiveTabFromRoute() {
   else activeTab.value = tabs.value[0]?.key ?? 'locations'
 }
 
+function resetTabState() {
+  locationError.value = ''
+  transferError.value = ''
+  locationPage.value = 1
+  transferPage.value = 1
+  transferFilters.search = ''
+  transferFilters.product_id = ''
+  transferFilters.from_location_id = ''
+  transferFilters.to_location_id = ''
+  transferFilters.date_from = ''
+  transferFilters.date_to = ''
+  closeTransferTooltip()
+  selectedTransfer.value = null
+  pendingLocation.value = null
+  pendingTransfer.value = null
+  locationModalOpen.value = false
+  transferModalOpen.value = false
+  locationSaveConfirmOpen.value = false
+  transferSaveConfirmOpen.value = false
+}
+
 function setActiveTab(tab: InventoryTab) {
   if (!tabs.value.some((item) => item.key === tab)) return
-  activeTab.value = tab
+  if (activeTab.value !== tab) resetTabState()
   router.replace({ path: '/inventory-management', query: { ...route.query, tab } })
 }
 
@@ -529,7 +550,9 @@ async function applyTransferAction() {
 }
 
 watch(() => route.query.tab, () => {
+  const previousTab = activeTab.value
   syncActiveTabFromRoute()
+  if (previousTab !== activeTab.value) resetTabState()
   loadActiveTab()
 })
 
@@ -661,7 +684,7 @@ onBeforeUnmount(() => {
         <StatCard :label="app.t('inventory.transfer.status.cancelled')" :value="transferSummary.cancelled" :helper="app.t('inventory.transfers.cancelledHelper')" icon="circle-x" tone="danger" />
       </div>
 
-      <AppCard class="min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
+      <AppCard class="relative z-20 min-w-0 max-w-full overflow-visible dark:bg-slate-900/80">
         <div class="mb-5 grid min-w-0 max-w-full gap-4">
           <div class="grid min-w-0 max-w-full gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <AppInput class="min-w-0" v-model="transferFilters.search" :label="app.t('inventory.transfers.search')"

@@ -5,6 +5,7 @@ import { apiClient, patchJSON, postJSON } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
 import AppButton from '../components/AppButton.vue'
 import AppCard from '../components/AppCard.vue'
+import AppDateRangeFilter from '../components/AppDateRangeFilter.vue'
 import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
@@ -40,6 +41,7 @@ const router = useRouter()
 
 const purchaseOrders = ref<PurchaseOrder[]>([])
 const suppliers = ref<Supplier[]>([])
+const supplierOptions = ref<Supplier[]>([])
 const locations = ref<Location[]>([])
 const products = ref<Product[]>([])
 const selectedPO = ref<PurchaseOrder | null>(null)
@@ -62,6 +64,20 @@ const poPageSize = ref(20)
 const supplierPage = ref(1)
 const supplierPageSize = ref(20)
 const confirmState = reactive<ConfirmState>({ type: '', po: null, supplier: null, action: '' })
+
+const poFilters = reactive({
+  search: '',
+  supplier_id: '',
+  location_id: '',
+  status: '',
+  date_from: '',
+  date_to: '',
+})
+
+const supplierFilters = reactive({
+  search: '',
+  status: '',
+})
 
 const poForm = reactive({
   supplier_id: '',
@@ -87,7 +103,8 @@ const canViewSuppliers = computed(() => auth.hasPermission('suppliers.view'))
 const canCreateSupplier = computed(() => auth.hasPermission('suppliers.create'))
 const canUpdateSupplier = computed(() => auth.hasPermission('suppliers.update'))
 const canDeactivateSupplier = computed(() => auth.hasPermission('suppliers.deactivate'))
-const activeSuppliers = computed(() => suppliers.value.filter((supplier) => supplier.is_active))
+const activeSuppliers = computed(() => supplierOptions.value.filter((supplier) => supplier.is_active))
+const activeSupplierRows = computed(() => suppliers.value.filter((supplier) => supplier.is_active))
 const locale = computed(() => app.language === 'th' ? 'th-TH' : 'en-US')
 const activeTab = ref<ProcurementTab>(canViewPO.value ? 'purchase-orders' : 'suppliers')
 
@@ -152,8 +169,30 @@ function syncQuery(tab: ProcurementTab) {
   router.replace({ path: '/procurement', query: { ...route.query, tab } })
 }
 
+function resetTabState() {
+  poError.value = ''
+  supplierError.value = ''
+  poPage.value = 1
+  supplierPage.value = 1
+  poFilters.search = ''
+  poFilters.supplier_id = ''
+  poFilters.location_id = ''
+  poFilters.status = ''
+  poFilters.date_from = ''
+  poFilters.date_to = ''
+  supplierFilters.search = ''
+  supplierFilters.status = ''
+  selectedPO.value = null
+  poDetailOpen.value = false
+  poModalOpen.value = false
+  supplierModalOpen.value = false
+  poSaveConfirmOpen.value = false
+  supplierSaveConfirmOpen.value = false
+  closeConfirm(true)
+}
+
 function setTab(tab: ProcurementTab) {
-  activeTab.value = tab
+  if (activeTab.value !== tab) resetTabState()
   syncQuery(tab)
 }
 
@@ -405,7 +444,7 @@ async function saveSupplier() {
     } else {
       await postJSON<Supplier>('/v1/suppliers', payload)
     }
-    await loadSuppliers()
+    await Promise.all([loadSuppliers(), loadSupplierOptions()])
     supplierSaveConfirmOpen.value = false
     closeSupplierModal(true)
     app.pushToast({ type: 'success', message: successMessage })
@@ -430,7 +469,7 @@ async function confirmSupplierStatus() {
   supplierError.value = ''
   try {
     await patchJSON<Supplier>(`/v1/suppliers/${confirmState.supplier.id}/status`, { is_active: !confirmState.supplier.is_active })
-    await loadSuppliers()
+    await Promise.all([loadSuppliers(), loadSupplierOptions()])
     app.pushToast({ type: 'success', message: app.t('procurement.supplierStatusUpdated') })
     closeConfirm(true)
   } catch (err) {
@@ -446,7 +485,12 @@ async function loadPurchaseOrders() {
   loadingPO.value = true
   poError.value = ''
   try {
-    purchaseOrders.value = await apiClient<PurchaseOrder[]>('/v1/purchase-orders')
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(poFilters)) {
+      if (value.trim()) params.set(key, value.trim())
+    }
+    const query = params.toString()
+    purchaseOrders.value = await apiClient<PurchaseOrder[]>(`/v1/purchase-orders${query ? `?${query}` : ''}`)
     poPage.value = Math.min(poPage.value, poTotalPages.value)
   } catch (err) {
     poError.value = friendlyError(err, 'procurement.poLoadFailed')
@@ -460,7 +504,12 @@ async function loadSuppliers() {
   loadingSuppliers.value = true
   supplierError.value = ''
   try {
-    suppliers.value = await apiClient<Supplier[]>('/v1/suppliers')
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(supplierFilters)) {
+      if (value.trim()) params.set(key, value.trim())
+    }
+    const query = params.toString()
+    suppliers.value = await apiClient<Supplier[]>(`/v1/suppliers${query ? `?${query}` : ''}`)
     supplierPage.value = Math.min(supplierPage.value, supplierTotalPages.value)
   } catch (err) {
     supplierError.value = friendlyError(err, 'procurement.supplierLoadFailed')
@@ -469,15 +518,47 @@ async function loadSuppliers() {
   }
 }
 
+async function loadSupplierOptions() {
+  if (!canViewPO.value && !canViewSuppliers.value) return
+  supplierOptions.value = await apiClient<Supplier[]>('/v1/suppliers')
+}
+
+async function applyPOFilters() {
+  poPage.value = 1
+  await loadPurchaseOrders()
+}
+
+async function resetPOFilters() {
+  poFilters.search = ''
+  poFilters.supplier_id = ''
+  poFilters.location_id = ''
+  poFilters.status = ''
+  poFilters.date_from = ''
+  poFilters.date_to = ''
+  poPage.value = 1
+  await loadPurchaseOrders()
+}
+
+async function applySupplierFilters() {
+  supplierPage.value = 1
+  await loadSuppliers()
+}
+
+async function resetSupplierFilters() {
+  supplierFilters.search = ''
+  supplierFilters.status = ''
+  supplierPage.value = 1
+  await loadSuppliers()
+}
+
 async function loadOptions() {
   const requests: Promise<unknown>[] = []
   if (canViewPO.value) {
     requests.push(apiClient<Location[]>('/v1/locations').then((rows) => { locations.value = rows.filter((item) => item.is_active) }))
     requests.push(apiClient<Product[]>('/v1/products').then((rows) => { products.value = rows.filter((item) => item.is_active) }))
   }
-  if (canViewPO.value || canViewSuppliers.value) {
-    requests.push(loadSuppliers())
-  }
+  if (canViewPO.value || canViewSuppliers.value) requests.push(loadSupplierOptions())
+  if (canViewSuppliers.value) requests.push(loadSuppliers())
   await Promise.all(requests)
   if (poForm.items.length === 0) resetPOForm()
 }
@@ -509,17 +590,22 @@ onMounted(async () => {
   await loadPurchaseOrders()
 })
 
-watch(() => route.query.tab, alignTabWithRoute)
+watch(() => route.query.tab, async () => {
+  const previousTab = activeTab.value
+  alignTabWithRoute()
+  if (previousTab !== activeTab.value) resetTabState()
+  await refreshActiveTab()
+})
 </script>
 
 <template>
-  <section>
+  <section class="min-w-0 max-w-full">
     <PageHeader :title="app.t('procurement.title')" :eyebrow="app.t('procurement.eyebrow')" :description="app.t('procurement.description')" icon="clipboard-list" />
 
-    <div class="grid gap-4">
+    <div class="grid min-w-0 max-w-full gap-4">
       <AppTabs v-if="availableTabs.length > 1" :tabs="availableTabs" :model-value="activeTab" @update:model-value="setTab" />
 
-      <div v-if="activeTab === 'purchase-orders'" class="grid gap-4">
+      <div v-if="activeTab === 'purchase-orders'" class="grid min-w-0 max-w-full gap-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 class="text-xl font-black text-slate-950 dark:text-slate-50">{{ app.t('procurement.purchaseOrders') }}</h2>
@@ -536,13 +622,49 @@ watch(() => route.query.tab, alignTabWithRoute)
           <StatCard :label="app.t('procurement.status.CANCELLED')" :value="poSummary.cancelled" :helper="app.t('procurement.cancelledHelper')" icon="triangle-alert" tone="danger" />
         </div>
 
-        <AppCard class="dark:bg-slate-900/80">
+        <AppCard class="min-w-0 max-w-full dark:bg-slate-900/80">
+          <div class="grid min-w-0 max-w-full gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <AppInput v-model="poFilters.search" :label="app.t('procurement.search')" :placeholder="app.t('procurement.poSearchPlaceholder')" @keyup.enter="applyPOFilters" />
+            <AppSelect v-model="poFilters.supplier_id" :label="app.t('procurement.supplier')">
+              <option value="">{{ app.t('procurement.allSuppliers') }}</option>
+              <option v-for="supplier in supplierOptions" :key="supplier.id" :value="String(supplier.id)">{{ supplier.name }}</option>
+            </AppSelect>
+            <AppSelect v-model="poFilters.location_id" :label="app.t('procurement.targetLocation')">
+              <option value="">{{ app.t('procurement.allLocations') }}</option>
+              <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
+            </AppSelect>
+            <AppSelect v-model="poFilters.status" :label="app.t('procurement.status')">
+              <option value="">{{ app.t('procurement.allStatuses') }}</option>
+              <option value="DRAFT">{{ app.t('procurement.status.DRAFT') }}</option>
+              <option value="SENT">{{ app.t('procurement.status.SENT') }}</option>
+              <option value="RECEIVED">{{ app.t('procurement.status.RECEIVED') }}</option>
+              <option value="CANCELLED">{{ app.t('procurement.status.CANCELLED') }}</option>
+            </AppSelect>
+          </div>
+          <div class="mt-3 grid min-w-0 max-w-full gap-3 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-end">
+            <AppDateRangeFilter
+              v-model:date-from="poFilters.date_from"
+              v-model:date-to="poFilters.date_to"
+              :date-from-label="app.t('procurement.dateFrom')"
+              :date-to-label="app.t('procurement.dateTo')"
+              :date-placeholder="app.t('procurement.selectDate')"
+              :locale="app.language === 'th' ? 'th-TH-u-ca-buddhist' : 'en-US'"
+              :show-shortcuts="false"
+            />
+            <div class="grid grid-cols-2 gap-2">
+              <AppButton class="w-full whitespace-nowrap" icon="search" @click="applyPOFilters">{{ app.t('procurement.applyFilters') }}</AppButton>
+              <AppButton class="w-full whitespace-nowrap" variant="secondary" @click="resetPOFilters">{{ app.t('procurement.resetFilters') }}</AppButton>
+            </div>
+          </div>
+        </AppCard>
+
+        <AppCard class="min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
           <div v-if="poError" class="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ poError }}</div>
           <AppLoadingState v-if="loadingPO" :label="app.t('procurement.loadingPO')" />
           <AppEmptyState v-else-if="purchaseOrders.length === 0" :title="app.t('procurement.noPO')" :description="app.t('procurement.noPODescription')" icon="clipboard-list" />
-          <div v-else>
-            <div class="hidden overflow-x-auto lg:block">
-              <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+          <div v-else class="min-w-0 max-w-full">
+            <div class="hidden w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable] md:block">
+              <table class="w-full min-w-[1180px] divide-y divide-slate-200 text-sm dark:divide-slate-800">
                 <thead class="bg-slate-50 dark:bg-slate-950/70">
                   <tr>
                     <th class="px-3 py-3 text-left">{{ app.t('procurement.poNo') }}</th>
@@ -566,12 +688,12 @@ watch(() => route.query.tab, alignTabWithRoute)
                     <td class="px-3 py-3 text-right font-semibold">{{ money(po.total_cost) }}</td>
                     <td class="px-3 py-3 pl-8">{{ formatDate(po.created_at) }}</td>
                     <td class="px-3 py-3">
-                      <div class="flex flex-wrap justify-end gap-2">
-                        <AppButton variant="secondary" @click="showPO(po)">{{ app.t('procurement.detail') }}</AppButton>
-                        <AppButton v-if="po.status === 'DRAFT' && canUpdatePO" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('procurement.edit')" :aria-label="app.t('procurement.edit')" @click="openEditPO(po)" />
-                        <AppButton v-if="po.status === 'DRAFT' && canSendPO" @click="openPOConfirm(po, 'send')">{{ app.t('procurement.sendPO') }}</AppButton>
-                        <AppButton v-if="(po.status === 'DRAFT' || po.status === 'SENT') && canReceivePO" @click="openPOConfirm(po, 'receive')">{{ app.t('procurement.receivePO') }}</AppButton>
-                        <AppButton v-if="(po.status === 'DRAFT' || po.status === 'SENT') && canCancelPO" variant="danger" @click="openPOConfirm(po, 'cancel')">{{ app.t('procurement.cancelPO') }}</AppButton>
+                      <div class="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
+                        <AppButton class="!h-10 !min-h-10 whitespace-nowrap !py-0" variant="secondary" @click="showPO(po)">{{ app.t('procurement.detail') }}</AppButton>
+                        <AppButton v-if="po.status === 'DRAFT' && canUpdatePO" class="!box-border !h-10 !min-h-10 !w-10 !min-w-10 !shrink-0 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('procurement.edit')" :aria-label="app.t('procurement.edit')" @click="openEditPO(po)" />
+                        <AppButton v-if="po.status === 'DRAFT' && canSendPO" class="!h-10 !min-h-10 whitespace-nowrap !py-0" @click="openPOConfirm(po, 'send')">{{ app.t('procurement.sendPO') }}</AppButton>
+                        <AppButton v-if="(po.status === 'DRAFT' || po.status === 'SENT') && canReceivePO" class="!h-10 !min-h-10 whitespace-nowrap !py-0" @click="openPOConfirm(po, 'receive')">{{ app.t('procurement.receivePO') }}</AppButton>
+                        <AppButton v-if="(po.status === 'DRAFT' || po.status === 'SENT') && canCancelPO" class="!h-10 !min-h-10 whitespace-nowrap !py-0" variant="danger" @click="openPOConfirm(po, 'cancel')">{{ app.t('procurement.cancelPO') }}</AppButton>
                       </div>
                     </td>
                   </tr>
@@ -579,7 +701,7 @@ watch(() => route.query.tab, alignTabWithRoute)
               </table>
             </div>
 
-            <div class="grid gap-3 lg:hidden">
+            <div class="grid gap-3 md:hidden">
               <article v-for="po in visiblePurchaseOrders" :key="po.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/60">
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
@@ -620,7 +742,7 @@ watch(() => route.query.tab, alignTabWithRoute)
         </AppCard>
       </div>
 
-      <div v-if="activeTab === 'suppliers'" class="grid gap-4">
+      <div v-if="activeTab === 'suppliers'" class="grid min-w-0 max-w-full gap-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 class="text-xl font-black text-slate-950 dark:text-slate-50">{{ app.t('procurement.suppliers') }}</h2>
@@ -632,17 +754,32 @@ watch(() => route.query.tab, alignTabWithRoute)
 
         <div class="grid gap-3 sm:grid-cols-3">
           <StatCard :label="app.t('procurement.totalSuppliers')" :value="suppliers.length" :helper="app.t('procurement.totalSuppliersHelper')" icon="truck" />
-          <StatCard :label="app.t('procurement.active')" :value="activeSuppliers.length" :helper="app.t('procurement.activeSuppliersHelper')" icon="check-circle" tone="success" />
-          <StatCard :label="app.t('procurement.inactive')" :value="suppliers.length - activeSuppliers.length" :helper="app.t('procurement.inactiveSuppliersHelper')" icon="triangle-alert" tone="warning" />
+          <StatCard :label="app.t('procurement.active')" :value="activeSupplierRows.length" :helper="app.t('procurement.activeSuppliersHelper')" icon="check-circle" tone="success" />
+          <StatCard :label="app.t('procurement.inactive')" :value="suppliers.length - activeSupplierRows.length" :helper="app.t('procurement.inactiveSuppliersHelper')" icon="triangle-alert" tone="warning" />
         </div>
 
-        <AppCard class="dark:bg-slate-900/80">
+        <AppCard class="min-w-0 max-w-full dark:bg-slate-900/80">
+          <div class="grid min-w-0 max-w-full gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_240px] xl:items-end">
+            <AppInput v-model="supplierFilters.search" :label="app.t('procurement.search')" :placeholder="app.t('procurement.supplierSearchPlaceholder')" @keyup.enter="applySupplierFilters" />
+            <AppSelect v-model="supplierFilters.status" :label="app.t('procurement.status')">
+              <option value="">{{ app.t('procurement.allStatuses') }}</option>
+              <option value="active">{{ app.t('procurement.active') }}</option>
+              <option value="inactive">{{ app.t('procurement.inactive') }}</option>
+            </AppSelect>
+            <div class="grid grid-cols-2 gap-2 sm:col-span-2 xl:col-span-1">
+              <AppButton class="w-full whitespace-nowrap" icon="search" @click="applySupplierFilters">{{ app.t('procurement.applyFilters') }}</AppButton>
+              <AppButton class="w-full whitespace-nowrap" variant="secondary" @click="resetSupplierFilters">{{ app.t('procurement.resetFilters') }}</AppButton>
+            </div>
+          </div>
+        </AppCard>
+
+        <AppCard class="min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
           <div v-if="supplierError" class="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ supplierError }}</div>
           <AppLoadingState v-if="loadingSuppliers" :label="app.t('procurement.loadingSuppliers')" />
           <AppEmptyState v-else-if="suppliers.length === 0" :title="app.t('procurement.noSuppliers')" :description="app.t('procurement.noSuppliersDescription')" icon="truck" />
-          <div v-else>
-            <div class="hidden overflow-x-auto lg:block">
-              <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+          <div v-else class="min-w-0 max-w-full">
+            <div class="hidden w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable] md:block">
+              <table class="w-full min-w-[980px] divide-y divide-slate-200 text-sm dark:divide-slate-800">
                 <thead class="bg-slate-50 dark:bg-slate-950/70">
                   <tr>
                     <th class="px-3 py-3 text-left">{{ app.t('procurement.supplierName') }}</th>
@@ -661,9 +798,9 @@ watch(() => route.query.tab, alignTabWithRoute)
                     <td class="px-3 py-3">{{ supplier.email || '-' }}</td>
                     <td class="px-3 py-3 text-right"><AppBadge :tone="supplier.is_active ? 'success' : 'neutral'">{{ supplier.is_active ? app.t('procurement.active') : app.t('procurement.inactive') }}</AppBadge></td>
                     <td class="px-3 py-3">
-                      <div class="flex flex-wrap justify-end gap-2">
-                        <AppButton v-if="canUpdateSupplier" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('procurement.edit')" :aria-label="app.t('procurement.edit')" @click="openEditSupplier(supplier)" />
-                        <AppButton v-if="canDeactivateSupplier" :variant="supplier.is_active ? 'danger' : 'secondary'" @click="openSupplierConfirm(supplier)">
+                      <div class="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
+                        <AppButton v-if="canUpdateSupplier" class="!box-border !h-10 !min-h-10 !w-10 !min-w-10 !shrink-0 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('procurement.edit')" :aria-label="app.t('procurement.edit')" @click="openEditSupplier(supplier)" />
+                        <AppButton v-if="canDeactivateSupplier" class="!h-10 !min-h-10 !min-w-28 whitespace-nowrap !py-0" :variant="supplier.is_active ? 'danger' : 'secondary'" @click="openSupplierConfirm(supplier)">
                           {{ supplier.is_active ? app.t('procurement.deactivate') : app.t('procurement.activate') }}
                         </AppButton>
                       </div>
@@ -673,7 +810,7 @@ watch(() => route.query.tab, alignTabWithRoute)
               </table>
             </div>
 
-            <div class="grid gap-3 lg:hidden">
+            <div class="grid gap-3 md:hidden">
               <article v-for="supplier in visibleSuppliers" :key="supplier.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/60">
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
@@ -746,9 +883,9 @@ watch(() => route.query.tab, alignTabWithRoute)
         </section>
 
         <div v-if="poError" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ poError }}</div>
-        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <AppButton type="button" variant="secondary" :disabled="savingPO" @click="closePOModal">{{ app.t('procurement.cancel') }}</AppButton>
-          <AppButton type="submit" :loading="savingPO" :disabled="savingPO">{{ editingPOID ? app.t('procurement.save') : app.t('procurement.createDraft') }}</AppButton>
+        <div class="sticky -bottom-6 -mx-5 -mb-5 flex flex-col-reverse gap-2 border-t border-slate-200 bg-white/90 p-4 backdrop-blur sm:-mx-6 sm:-mb-6 sm:flex-row sm:justify-end dark:border-slate-800 dark:bg-slate-900/90">
+          <AppButton class="w-full sm:w-auto" type="button" variant="secondary" :disabled="savingPO" @click="closePOModal">{{ app.t('procurement.cancel') }}</AppButton>
+          <AppButton class="w-full sm:w-auto" type="submit" :loading="savingPO" :disabled="savingPO">{{ editingPOID ? app.t('procurement.save') : app.t('procurement.createDraft') }}</AppButton>
         </div>
       </form>
     </AppModal>
@@ -806,9 +943,9 @@ watch(() => route.query.tab, alignTabWithRoute)
           <AppTextarea v-model="supplierForm.address" :label="app.t('procurement.address')" :placeholder="app.t('procurement.addressPlaceholder')" />
         </div>
         <div v-if="supplierError" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ supplierError }}</div>
-        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <AppButton type="button" variant="secondary" :disabled="savingSupplier" @click="closeSupplierModal">{{ app.t('procurement.cancel') }}</AppButton>
-          <AppButton type="submit" :loading="savingSupplier" :disabled="savingSupplier">{{ app.t('procurement.save') }}</AppButton>
+        <div class="sticky -bottom-6 -mx-5 -mb-5 flex flex-col-reverse gap-2 border-t border-slate-200 bg-white/90 p-4 backdrop-blur sm:-mx-6 sm:-mb-6 sm:flex-row sm:justify-end dark:border-slate-800 dark:bg-slate-900/90">
+          <AppButton class="w-full sm:w-auto" type="button" variant="secondary" :disabled="savingSupplier" @click="closeSupplierModal">{{ app.t('procurement.cancel') }}</AppButton>
+          <AppButton class="w-full sm:w-auto" type="submit" :loading="savingSupplier" :disabled="savingSupplier">{{ app.t('procurement.save') }}</AppButton>
         </div>
       </form>
     </AppModal>

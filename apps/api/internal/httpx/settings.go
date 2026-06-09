@@ -22,10 +22,11 @@ type AppSettings struct {
 }
 
 type ReceiptSettings struct {
-	ShopName      string `json:"shop_name"`
-	ShopPhone     string `json:"shop_phone"`
-	ShopAddress   string `json:"shop_address"`
-	ReceiptFooter string `json:"receipt_footer"`
+	ShopName          string `json:"shop_name"`
+	ShopPhone         string `json:"shop_phone"`
+	ShopAddress       string `json:"shop_address"`
+	DefaultLocationID uint64 `json:"default_location_id"`
+	ReceiptFooter     string `json:"receipt_footer"`
 }
 
 type LineSettings struct {
@@ -180,10 +181,11 @@ func (s *Server) loadReceiptSettings(ctx context.Context) (ReceiptSettings, erro
 		return ReceiptSettings{}, err
 	}
 	return ReceiptSettings{
-		ShopName:      valueOr(values, "shop_name", "Grocery POS"),
-		ShopPhone:     values["shop_phone"],
-		ShopAddress:   values["shop_address"],
-		ReceiptFooter: valueOr(values, "receipt_footer", "ขอบคุณที่อุดหนุน"),
+		ShopName:          valueOr(values, "shop_name", "Grocery POS"),
+		ShopPhone:         values["shop_phone"],
+		ShopAddress:       values["shop_address"],
+		DefaultLocationID: parseSettingUint(values["default_location_id"]),
+		ReceiptFooter:     valueOr(values, "receipt_footer", "ขอบคุณที่อุดหนุน"),
 	}, nil
 }
 

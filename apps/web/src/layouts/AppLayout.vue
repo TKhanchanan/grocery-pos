@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { apiClient } from '../api/client'
 import logoUrl from '../assets/logo.png'
@@ -28,6 +28,10 @@ const notificationsLoading = ref(false)
 const notificationError = ref('')
 const latestAlerts = ref<InventoryAlert[]>([])
 const topbarControls = ref<HTMLElement | null>(null)
+const notificationTrigger = ref<HTMLElement | null>(null)
+const notificationPanel = ref<HTMLElement | null>(null)
+const notificationPanelTop = ref(72)
+const notificationPanelRight = ref(16)
 
 const languageOptions = [
   { value: 'th', label: 'ไทย', flag: '🇹🇭' },
@@ -90,6 +94,10 @@ const activeNavPath = computed(() => route.name === 'receipt-detail' || route.na
 const canViewAlerts = computed(() => auth.hasPermission('alerts.view'))
 const alertBadgeLabel = computed(() => app.alertCount > 9 ? '9+' : String(app.alertCount))
 const dropdownAlerts = computed(() => latestAlerts.value.slice(0, 5))
+const notificationPanelStyle = computed(() => ({
+  '--notification-panel-top': `${notificationPanelTop.value}px`,
+  '--notification-panel-right': `${notificationPanelRight.value}px`,
+}))
 
 function isActive(to: string) {
   return activeNavPath.value === to
@@ -172,7 +180,11 @@ async function toggleNotifications() {
   languageOpen.value = false
   textSizeOpen.value = false
   window.dispatchEvent(new Event('topbar-control-opened'))
-  if (notificationsOpen.value) await loadLatestAlerts()
+  if (notificationsOpen.value) {
+    await nextTick()
+    updateNotificationPosition()
+    await loadLatestAlerts()
+  }
 }
 
 function toggleTextSize() {
@@ -200,8 +212,17 @@ function closeNotifications() {
   notificationsOpen.value = false
 }
 
+function updateNotificationPosition() {
+  const trigger = notificationTrigger.value
+  if (!trigger) return
+  const rect = trigger.getBoundingClientRect()
+  notificationPanelTop.value = rect.bottom + 8
+  notificationPanelRight.value = Math.max(16, window.innerWidth - rect.right)
+}
+
 function closeTopbarDropdowns(event: MouseEvent) {
-  if (topbarControls.value?.contains(event.target as Node)) return
+  const target = event.target as Node
+  if (topbarControls.value?.contains(target) || notificationPanel.value?.contains(target)) return
   languageOpen.value = false
   textSizeOpen.value = false
   notificationsOpen.value = false
@@ -210,10 +231,12 @@ function closeTopbarDropdowns(event: MouseEvent) {
 onMounted(() => {
   app.loadAlertCount()
   document.addEventListener('mousedown', closeTopbarDropdowns)
+  window.addEventListener('resize', updateNotificationPosition)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', closeTopbarDropdowns)
+  window.removeEventListener('resize', updateNotificationPosition)
 })
 
 watch(() => route.path, () => {
@@ -356,6 +379,7 @@ watch(() => route.path, () => {
             </div>
             <div v-if="canViewAlerts" class="relative">
               <button
+                ref="notificationTrigger"
                 class="relative grid h-10 w-10 place-items-center rounded-xl text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10"
                 :aria-label="app.t('topbar.openNotifications')"
                 :aria-expanded="notificationsOpen"
@@ -367,48 +391,56 @@ watch(() => route.path, () => {
                   {{ alertBadgeLabel }}
                 </span>
               </button>
-              <div v-if="notificationsOpen" class="absolute right-0 z-40 mt-2 w-[calc(100vw-2rem)] max-w-[360px] overflow-hidden rounded-2xl bg-white shadow-2xl shadow-slate-950/15 dark:bg-slate-900 dark:shadow-black/30">
-                <div class="flex items-start justify-between gap-3 border-b border-slate-100 p-4 dark:border-slate-800">
-                  <div>
-                    <p class="text-sm font-black">{{ app.t('topbar.notifications') }}</p>
-                    <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{{ app.t('topbar.unreadCount').replace('{count}', String(app.alertCount)) }}</p>
-                  </div>
-                </div>
-                <div class="max-h-[360px] overflow-auto p-2">
-                  <div v-if="notificationsLoading" class="p-4 text-sm font-semibold text-slate-500 dark:text-slate-400">{{ app.t('alerts.loading') }}</div>
-                  <div v-else-if="notificationError" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ notificationError }}</div>
-                  <div v-else-if="dropdownAlerts.length === 0" class="p-5 text-center">
-                    <div class="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-brand-50 text-brand-700 dark:bg-emerald-500/15 dark:text-emerald-100">
-                      <AppIcon name="bell" />
+              <Teleport to="body">
+                <div v-if="notificationsOpen" class="fixed inset-0 z-[990] bg-slate-950/45 backdrop-blur-sm sm:hidden" @click="closeNotifications" />
+                <div
+                  v-if="notificationsOpen"
+                  ref="notificationPanel"
+                  class="notification-panel fixed inset-x-4 top-20 z-[1000] flex max-h-[calc(100dvh-6rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl shadow-slate-950/20 dark:bg-slate-900 dark:shadow-black/40 sm:max-w-[360px]"
+                  :style="notificationPanelStyle"
+                >
+                  <div class="flex items-start justify-between gap-3 border-b border-slate-100 p-4 dark:border-slate-800">
+                    <div>
+                      <p class="text-sm font-black">{{ app.t('topbar.notifications') }}</p>
+                      <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{{ app.t('topbar.unreadCount').replace('{count}', String(app.alertCount)) }}</p>
                     </div>
-                    <p class="mt-3 text-sm font-black">{{ app.t('topbar.noNotifications') }}</p>
                   </div>
-                  <template v-else>
-                    <RouterLink
-                      v-for="alert in dropdownAlerts"
-                      :key="alert.id"
-                      to="/alerts"
-                      class="flex gap-3 rounded-xl p-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/80"
-                      @click="closeNotifications"
-                    >
-                      <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl" :class="alertIconClass(alert.type)">
-                        <AppIcon :name="alertIcon(alert.type)" :size="18" />
-                      </span>
-                      <span class="min-w-0 flex-1">
-                        <span class="flex items-start justify-between gap-2">
-                          <span class="truncate text-sm font-black">{{ alertTypeLabel(alert.type) }}</span>
-                          <span v-if="!alert.read_at" class="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                  <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:max-h-[360px]">
+                    <div v-if="notificationsLoading" class="p-4 text-sm font-semibold text-slate-500 dark:text-slate-400">{{ app.t('alerts.loading') }}</div>
+                    <div v-else-if="notificationError" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ notificationError }}</div>
+                    <div v-else-if="dropdownAlerts.length === 0" class="p-5 text-center">
+                      <div class="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-brand-50 text-brand-700 dark:bg-emerald-500/15 dark:text-emerald-100">
+                        <AppIcon name="bell" />
+                      </div>
+                      <p class="mt-3 text-sm font-black">{{ app.t('topbar.noNotifications') }}</p>
+                    </div>
+                    <template v-else>
+                      <RouterLink
+                        v-for="alert in dropdownAlerts"
+                        :key="alert.id"
+                        to="/alerts"
+                        class="flex min-w-0 gap-3 rounded-xl p-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/80"
+                        @click="closeNotifications"
+                      >
+                        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl" :class="alertIconClass(alert.type)">
+                          <AppIcon :name="alertIcon(alert.type)" :size="18" />
                         </span>
-                        <span class="mt-1 block truncate text-sm text-slate-600 dark:text-slate-300">{{ alertMessage(alert) }}</span>
-                        <span class="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{{ alert.location_name }} · {{ notificationTime(alert.created_at) }}</span>
-                      </span>
-                    </RouterLink>
-                  </template>
+                        <span class="min-w-0 flex-1">
+                          <span class="flex items-start justify-between gap-2">
+                            <span class="truncate text-sm font-black">{{ alertTypeLabel(alert.type) }}</span>
+                            <span v-if="!alert.read_at" class="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                          </span>
+                          <span class="mt-1 block truncate text-sm text-slate-600 dark:text-slate-300">{{ alertMessage(alert) }}</span>
+                          <span class="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{{ alert.location_name }} · {{ notificationTime(alert.created_at) }}</span>
+                        </span>
+                      </RouterLink>
+                    </template>
+                  </div>
+                  <RouterLink to="/alerts" class="block border-t border-slate-100 px-4 py-3 text-center text-sm font-black text-brand-700 hover:bg-brand-50 dark:border-slate-800 dark:text-emerald-300 dark:hover:bg-slate-800" @click="closeNotifications">
+                    {{ app.t('topbar.viewAllNotifications') }}
+                  </RouterLink>
                 </div>
-                <RouterLink to="/alerts" class="block border-t border-slate-100 px-4 py-3 text-center text-sm font-black text-brand-700 hover:bg-brand-50 dark:border-slate-800 dark:text-emerald-300 dark:hover:bg-slate-800" @click="closeNotifications">
-                  {{ app.t('topbar.viewAllNotifications') }}
-                </RouterLink>
-              </div>
+              </Teleport>
             </div>
             <button class="grid h-10 w-10 place-items-center rounded-xl text-slate-700 transition hover:bg-brand-50 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-teal-400/10" aria-label="Toggle theme" @click="languageOpen = false; textSizeOpen = false; notificationsOpen = false; app.toggleTheme()">
               <AppIcon :name="app.isDark ? 'sun' : 'moon'" :size="20" />
@@ -423,3 +455,13 @@ watch(() => route.path, () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@media (min-width: 640px) {
+  .notification-panel {
+    inset-inline: auto var(--notification-panel-right);
+    top: var(--notification-panel-top);
+    width: min(360px, calc(100vw - 2rem));
+  }
+}
+</style>

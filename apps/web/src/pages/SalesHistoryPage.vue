@@ -168,33 +168,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section>
+  <section class="min-w-0 max-w-full">
     <PageHeader :title="app.t('sales.title')" :eyebrow="app.t('sales.eyebrow')" :description="app.t('sales.description')" icon="purchase-order" />
 
-    <div class="grid gap-4">
-      <AppCard class="dark:bg-slate-900/80">
-        <div class="grid gap-4">
-          <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_240px] xl:items-end">
-            <AppDateRangeFilter v-model:date-from="filters.date_from" v-model:date-to="filters.date_to"
-              :date-from-label="app.t('sales.dateFrom')" :date-to-label="app.t('sales.dateTo')"
-              :date-placeholder="app.t('reports.selectDate')"
-              :month-placeholder="app.t('reports.selectMonth')"
-              :today-label="app.t('reports.today')"
-              :this-month-label="app.t('reports.thisMonth')"
-              :locale="app.language === 'th' ? 'th-TH-u-ca-buddhist' : 'en-US'"
-              :show-shortcuts="false" />
-
-            <div class="grid grid-cols-2 gap-2 xl:w-64">
-              <AppButton icon="search" @click="loadSales">
-                {{ app.t('sales.apply') }}
-              </AppButton>
-
-              <AppButton variant="secondary" @click="resetFilters">
-                {{ app.t('sales.reset') }}
-              </AppButton>
-            </div>
-          </div>
-          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+    <div class="grid min-w-0 max-w-full gap-4">
+      <AppCard class="relative z-20 min-w-0 max-w-full overflow-visible dark:bg-slate-900/80">
+        <div class="grid min-w-0 max-w-full gap-3 lg:grid-cols-2 2xl:grid-cols-4">
+          <div class="grid min-w-0 max-w-full gap-3 sm:grid-cols-2 lg:col-span-2 2xl:col-span-4 2xl:grid-cols-5">
             <AppInput v-model="filters.receipt_no" :label="app.t('sales.receiptNo')" :placeholder="app.t('sales.receiptPlaceholder')" />
             <AppInput v-model="filters.cashier_id" :label="app.t('sales.cashierId')" :placeholder="app.t('sales.cashierPlaceholder')" />
             <AppSelect v-model="filters.location_id" :label="app.t('sales.location')">
@@ -212,6 +192,26 @@ onMounted(async () => {
               <option value="CANCELLED">{{ app.t('sales.status.cancelled') }}</option>
             </AppSelect>
           </div>
+          <div class="grid min-w-0 max-w-full gap-3 lg:col-span-2 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-end 2xl:col-span-4">
+            <AppDateRangeFilter class="min-w-0 max-w-full" v-model:date-from="filters.date_from" v-model:date-to="filters.date_to"
+              :date-from-label="app.t('sales.dateFrom')" :date-to-label="app.t('sales.dateTo')"
+              :date-placeholder="app.t('reports.selectDate')"
+              :month-placeholder="app.t('reports.selectMonth')"
+              :today-label="app.t('reports.today')"
+              :this-month-label="app.t('reports.thisMonth')"
+              :locale="app.language === 'th' ? 'th-TH-u-ca-buddhist' : 'en-US'"
+              :show-shortcuts="false" />
+
+            <div class="grid grid-cols-2 gap-2 lg:w-60">
+              <AppButton class="w-full whitespace-nowrap" icon="search" @click="loadSales">
+                {{ app.t('sales.apply') }}
+              </AppButton>
+
+              <AppButton class="w-full whitespace-nowrap" variant="secondary" @click="resetFilters">
+                {{ app.t('sales.reset') }}
+              </AppButton>
+            </div>
+          </div>
         </div>
       </AppCard>
 
@@ -225,9 +225,10 @@ onMounted(async () => {
       <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:bg-slate-900 dark:text-slate-300">{{ app.t('sales.loading') }}</div>
       <AppEmptyState v-else-if="sales.length === 0" :title="app.t('sales.empty')" :description="app.t('sales.emptyDescription')" />
 
-      <AppCard v-else class="dark:bg-slate-900/80">
-        <div class="hidden overflow-x-auto lg:block">
-          <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+      <AppCard v-else class="min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
+        <div class="min-w-0 max-w-full">
+        <div class="hidden w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable] md:block">
+          <table class="w-full min-w-[1280px] divide-y divide-slate-200 text-sm dark:divide-slate-800">
             <thead class="bg-slate-50 dark:bg-slate-950/60">
               <tr>
                 <th class="px-3 py-3 text-left font-black text-slate-600 dark:text-slate-300">{{ app.t('sales.receipt') }}</th>
@@ -269,8 +270,8 @@ onMounted(async () => {
           </table>
         </div>
 
-        <div class="grid gap-3 lg:hidden">
-          <article v-for="sale in visibleSales" :key="sale.id" class="rounded-lg border border-slate-200 p-3">
+        <div class="grid gap-3 md:hidden">
+          <article v-for="sale in visibleSales" :key="sale.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/60">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <h2 class="font-bold">{{ sale.receipt_no }}</h2>
@@ -307,6 +308,7 @@ onMounted(async () => {
             <span class="font-bold text-slate-600 dark:text-slate-300">{{ t('sales.page', { page, total: totalPages }) }}</span>
             <AppButton variant="secondary" :disabled="page >= totalPages" @click="nextPage">{{ app.t('sales.next') }}</AppButton>
           </div>
+        </div>
         </div>
       </AppCard>
     </div>
