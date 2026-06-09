@@ -8,6 +8,7 @@ import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import AppModal from '../components/AppModal.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import AppSelect from '../components/AppSelect.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -23,7 +24,7 @@ interface UserForm {
   password: string
   fullName: string
   role: Role
-  role_ids: number[]
+  role_id: string
   active: boolean
 }
 
@@ -38,13 +39,15 @@ const formOpen = ref(false)
 const saveConfirmOpen = ref(false)
 const targetUser = ref<User | null>(null)
 const confirmOpen = ref(false)
+const page = ref(1)
+const pageSize = ref(10)
 const form = reactive<UserForm>({
   id: 0,
   username: '',
   password: '',
   fullName: '',
   role: 'CASHIER',
-  role_ids: [],
+  role_id: '',
   active: true,
 })
 
@@ -56,6 +59,11 @@ const canAssignRoles = computed(() => auth.hasPermission('users.assign_roles'))
 const activeCount = computed(() => users.value.filter((user) => user.active).length)
 const inactiveCount = computed(() => users.value.length - activeCount.value)
 const adminCount = computed(() => users.value.filter((user) => user.role === 'ADMIN' || user.roles?.some((role) => role.code === 'ADMIN')).length)
+const totalPages = computed(() => Math.max(1, Math.ceil(users.value.length / pageSize.value)))
+const visibleUsers = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return users.value.slice(start, start + pageSize.value)
+})
 const saveConfirmTitle = computed(() => editing.value ? app.t('users.confirmUpdateTitle') : app.t('users.confirmCreateTitle'))
 const saveConfirmMessage = computed(() => t('users.confirmSaveMessage', { name: form.fullName.trim() || form.username.trim() || app.t('users.name') }))
 
@@ -80,6 +88,7 @@ async function loadUsers() {
     ])
     users.value = userRows
     roles.value = roleRows.filter((role) => role.is_active)
+    page.value = Math.min(page.value, totalPages.value)
   } catch (err) {
     error.value = friendlyError(err, 'users.loadFailed')
   } finally {
@@ -88,14 +97,14 @@ async function loadUsers() {
 }
 
 function resetForm() {
-  const cashier = roles.value.find((role) => role.code === 'CASHIER')
+  const selectedRole = roles.value.find((role) => role.code === 'CASHIER') ?? roles.value[0]
   Object.assign(form, {
     id: 0,
     username: '',
     password: '',
     fullName: '',
-    role: 'CASHIER' as Role,
-    role_ids: cashier ? [cashier.id] : [],
+    role: legacyRoleFor(selectedRole),
+    role_id: selectedRole ? String(selectedRole.id) : '',
     active: true,
   })
   error.value = ''
@@ -107,13 +116,18 @@ function openCreate() {
 }
 
 function openEdit(user: User) {
+  const selectedRole = user.roles
+    ?.map((assignedRole) => roles.value.find((role) => role.id === assignedRole.id || role.code === assignedRole.code))
+    .find((role): role is RoleRecord => Boolean(role))
+    ?? roles.value.find((role) => role.code === user.role)
+    ?? roles.value[0]
   Object.assign(form, {
     id: user.id,
     username: user.username,
     password: '',
     fullName: user.fullName,
-    role: user.role,
-    role_ids: user.roles?.map((role) => role.id).filter(Boolean) ?? [],
+    role: selectedRole ? legacyRoleFor(selectedRole) : user.role,
+    role_id: selectedRole ? String(selectedRole.id) : '',
     active: user.active,
   })
   error.value = ''
@@ -127,17 +141,21 @@ function closeForm(force = false) {
   resetForm()
 }
 
-function toggleRole(roleID: number, checked: boolean) {
-  const next = new Set(form.role_ids)
-  if (checked) next.add(roleID)
-  else next.delete(roleID)
-  form.role_ids = [...next]
+function legacyRoleFor(role?: RoleRecord): Role {
+  if (role?.code === 'ADMIN' || role?.code === 'MANAGER' || role?.code === 'CASHIER') return role.code
+  return 'CASHIER'
+}
+
+function selectRole(roleID: string) {
+  form.role_id = roleID
+  form.role = legacyRoleFor(roles.value.find((role) => role.id === Number(roleID)))
 }
 
 function validateForm() {
   if (!form.username.trim()) return app.t('users.usernameRequired')
   if (!form.fullName.trim()) return app.t('users.nameRequired')
   if (!editing.value && !form.password.trim()) return app.t('users.passwordRequired')
+  if (!form.role_id) return app.t('users.roleRequired')
   return ''
 }
 
@@ -164,7 +182,7 @@ async function saveUser() {
     password: form.password,
     fullName: form.fullName.trim(),
     role: form.role,
-    role_ids: form.role_ids,
+    role_ids: form.role_id ? [Number(form.role_id)] : [],
     active: form.active,
   }
   try {
@@ -183,8 +201,25 @@ async function saveUser() {
 }
 
 function askStatus(user: User) {
+  if (user.id === auth.user?.id && user.active) {
+    app.pushToast({ type: 'error', message: app.t('users.selfDeactivateForbidden') })
+    return
+  }
   targetUser.value = user
   confirmOpen.value = true
+}
+
+function changePageSize(value: number) {
+  pageSize.value = value
+  page.value = 1
+}
+
+function previousPage() {
+  if (page.value > 1) page.value -= 1
+}
+
+function nextPage() {
+  if (page.value < totalPages.value) page.value += 1
 }
 
 async function confirmStatus() {
@@ -236,8 +271,8 @@ onMounted(loadUsers)
       </AppEmptyState>
 
       <div v-else>
-        <div class="hidden overflow-x-auto lg:block">
-          <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+        <div class="hidden w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain lg:block">
+          <table class="w-full min-w-[980px] divide-y divide-slate-200 text-sm dark:divide-slate-800">
             <thead class="bg-slate-50 dark:bg-slate-950/70">
               <tr>
                 <th class="px-3 py-3 text-left">{{ app.t('users.name') }}</th>
@@ -249,7 +284,7 @@ onMounted(loadUsers)
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-              <tr v-for="user in users" :key="user.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
+              <tr v-for="user in visibleUsers" :key="user.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
                 <td class="px-3 py-3 font-semibold">{{ user.fullName }}</td>
                 <td class="px-3 py-3">{{ user.username }}</td>
                 <td class="px-3 py-3 text-slate-500 dark:text-slate-400">{{ userEmail(user) }}</td>
@@ -262,7 +297,7 @@ onMounted(loadUsers)
                 <td class="px-3 py-3">
                   <div class="flex flex-wrap justify-end gap-2">
                     <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('users.edit')" :aria-label="app.t('users.edit')" @click="openEdit(user)" />
-                    <AppButton v-if="canDeactivate" :variant="user.active ? 'danger' : 'secondary'" @click="askStatus(user)">
+                    <AppButton v-if="canDeactivate" :variant="user.active ? 'danger' : 'secondary'" :disabled="user.id === auth.user?.id && user.active" :title="user.id === auth.user?.id && user.active ? app.t('users.selfDeactivateForbidden') : undefined" @click="askStatus(user)">
                       {{ user.active ? app.t('users.deactivate') : app.t('users.activate') }}
                     </AppButton>
                   </div>
@@ -273,7 +308,7 @@ onMounted(loadUsers)
         </div>
 
         <div class="grid gap-3 lg:hidden">
-          <article v-for="user in users" :key="user.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/60">
+          <article v-for="user in visibleUsers" :key="user.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 dark:border-slate-700 dark:bg-slate-950/60">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <h3 class="truncate font-black">{{ user.fullName }}</h3>
@@ -286,11 +321,25 @@ onMounted(loadUsers)
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
               <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('users.edit')" :aria-label="app.t('users.edit')" @click="openEdit(user)" />
-              <AppButton v-if="canDeactivate" :variant="user.active ? 'danger' : 'secondary'" @click="askStatus(user)">
+              <AppButton v-if="canDeactivate" :variant="user.active ? 'danger' : 'secondary'" :disabled="user.id === auth.user?.id && user.active" :title="user.id === auth.user?.id && user.active ? app.t('users.selfDeactivateForbidden') : undefined" @click="askStatus(user)">
                 {{ user.active ? app.t('users.deactivate') : app.t('users.activate') }}
               </AppButton>
             </div>
           </article>
+        </div>
+
+        <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-slate-500 dark:text-slate-400">{{ app.t('users.show') }}</span>
+            <AppPageSizeSelect :model-value="pageSize" @update:model-value="changePageSize" />
+            <span class="text-slate-500 dark:text-slate-400">{{ app.t('users.perPage') }}</span>
+            <span class="text-slate-500 dark:text-slate-400">{{ app.t('users.totalRows') }} {{ users.length }}</span>
+          </div>
+          <div class="flex items-center justify-end gap-2">
+            <AppButton variant="secondary" :disabled="page <= 1" @click="previousPage">{{ app.t('users.previous') }}</AppButton>
+            <span class="font-bold text-slate-600 dark:text-slate-300">{{ t('users.page', { page, total: totalPages }) }}</span>
+            <AppButton variant="secondary" :disabled="page >= totalPages" @click="nextPage">{{ app.t('users.next') }}</AppButton>
+          </div>
         </div>
       </div>
     </AppCard>
@@ -303,41 +352,18 @@ onMounted(loadUsers)
             <AppInput v-model="form.username" :label="app.t('users.username')" :placeholder="app.t('users.usernamePlaceholder')" />
           </div>
           <div class="grid gap-3 md:grid-cols-2">
-          <AppInput v-model="form.password" :label="app.t('users.password')" type="password" :placeholder="editing ? app.t('users.passwordOptional') : app.t('users.passwordPlaceholder')" />
-          <AppSelect v-model="form.role" :label="app.t('users.legacyRole')">
-            <option value="ADMIN">ADMIN</option>
-            <option value="MANAGER">MANAGER</option>
-            <option value="CASHIER">CASHIER</option>
-          </AppSelect>
+            <AppInput v-model="form.password" :label="app.t('users.password')" type="password" :placeholder="editing ? app.t('users.passwordOptional') : app.t('users.passwordPlaceholder')" />
+            <AppSelect :model-value="form.role_id" :label="app.t('users.roleName')" :disabled="!canAssignRoles" @update:model-value="selectRole">
+              <option v-for="role in roles" :key="role.id" :value="String(role.id)">{{ role.name }}</option>
+            </AppSelect>
           </div>
         </div>
 
-        <section class="grid gap-2 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/45">
-          <div class="flex items-center justify-between gap-3">
-            <p class="text-sm font-black uppercase text-brand-700 dark:text-emerald-300">{{ app.t('users.dynamicRoles') }}</p>
-            <AppBadge tone="info">{{ t('users.selectedCount', { count: form.role_ids.length }) }}</AppBadge>
-          </div>
-          <div class="grid gap-2 md:grid-cols-2">
-            <label v-for="role in roles" :key="role.id" class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white/70 p-3 text-sm dark:border-slate-700 dark:bg-slate-900/60">
-              <input
-                class="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600"
-                type="checkbox"
-                :checked="form.role_ids.includes(role.id)"
-                :disabled="!canAssignRoles"
-                @change="toggleRole(role.id, ($event.target as HTMLInputElement).checked)"
-              />
-              <span>
-                <span class="block font-bold">{{ role.name }}</span>
-                <span class="block text-xs text-slate-500 dark:text-slate-400">{{ role.code }}</span>
-              </span>
-            </label>
-          </div>
-        </section>
-
         <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          <input v-model="form.active" type="checkbox" />
+          <input v-model="form.active" type="checkbox" :disabled="editing && form.id === auth.user?.id" />
           {{ app.t('users.active') }}
         </label>
+        <p v-if="editing && form.id === auth.user?.id" class="text-xs font-semibold text-amber-700 dark:text-amber-200">{{ app.t('users.selfDeactivateForbidden') }}</p>
         <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ error }}</div>
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <AppButton type="button" variant="secondary" :disabled="saving" @click="closeForm">{{ app.t('users.cancel') }}</AppButton>

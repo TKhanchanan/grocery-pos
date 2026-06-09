@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { apiClient, patchJSON, postJSON } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
 import AppButton from '../components/AppButton.vue'
@@ -8,6 +8,7 @@ import AppEmptyState from '../components/AppEmptyState.vue'
 import AppInput from '../components/AppInput.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import AppModal from '../components/AppModal.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
 import AppTextarea from '../components/AppTextarea.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -102,6 +103,8 @@ const roleModalOpen = ref(false)
 const saveConfirmOpen = ref(false)
 const confirmOpen = ref(false)
 const targetRole = ref<RoleRecord | null>(null)
+const page = ref(1)
+const pageSize = ref(10)
 const form = reactive<RoleForm>({ id: 0, code: '', name: '', description: '', is_active: true })
 
 const canCreate = computed(() => auth.hasPermission('roles.create'))
@@ -115,11 +118,17 @@ const totalPermissions = computed(() => permissions.value.length)
 const allPermissionCodes = computed(() => permissions.value.map((permission) => permission.code))
 const saveConfirmTitle = computed(() => editing.value ? app.t('roles.confirmUpdateTitle') : app.t('roles.confirmCreateTitle'))
 const saveConfirmMessage = computed(() => t('roles.confirmSaveMessage', { name: form.name.trim() || form.code.trim() || app.t('roles.role') }))
+const editingRole = computed(() => roles.value.find((role) => role.id === form.id))
 
 const filteredRoles = computed(() => {
   const query = roleSearch.value.trim().toLowerCase()
   if (!query) return roles.value
   return roles.value.filter((role) => `${role.code} ${role.name} ${role.description}`.toLowerCase().includes(query))
+})
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredRoles.value.length / pageSize.value)))
+const visibleRoles = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filteredRoles.value.slice(start, start + pageSize.value)
 })
 
 const filteredPermissions = computed(() => {
@@ -185,6 +194,7 @@ async function load() {
     ])
     roles.value = roleRows
     permissions.value = permissionRows
+    page.value = Math.min(page.value, totalPages.value)
   } catch (err) {
     error.value = err instanceof Error ? err.message : app.t('roles.loadFailed')
   } finally {
@@ -216,7 +226,8 @@ async function openEditRole(role: RoleRecord) {
   error.value = ''
   roleModalOpen.value = true
   try {
-    formPermissionCodes.value = await apiClient<string[]>(`/v1/roles/${role.id}/permissions`)
+    const codes = await apiClient<string[]>(`/v1/roles/${role.id}/permissions`)
+    formPermissionCodes.value = withPermissionDependencies(codes)
   } catch (err) {
     app.pushToast({ type: 'error', message: app.t('roles.permissionsLoadFailed'), description: err instanceof Error ? err.message : '' })
   }
@@ -226,26 +237,46 @@ function togglePermission(code: string, checked: boolean) {
   const next = new Set(formPermissionCodes.value)
   if (checked) next.add(code)
   else next.delete(code)
-  formPermissionCodes.value = [...next].sort()
+  formPermissionCodes.value = withPermissionDependencies([...next])
 }
 
 function selectPermissions(items: PermissionRecord[]) {
   const next = new Set(formPermissionCodes.value)
   items.forEach((item) => next.add(item.code))
-  formPermissionCodes.value = [...next].sort()
+  formPermissionCodes.value = withPermissionDependencies([...next])
 }
 
 function clearPermissions(items: PermissionRecord[]) {
   const remove = new Set(items.map((item) => item.code))
-  formPermissionCodes.value = formPermissionCodes.value.filter((code) => !remove.has(code))
+  formPermissionCodes.value = withPermissionDependencies(formPermissionCodes.value.filter((code) => !remove.has(code)))
 }
 
 function selectAllPermissions() {
-  formPermissionCodes.value = [...allPermissionCodes.value].sort()
+  formPermissionCodes.value = withPermissionDependencies(allPermissionCodes.value)
 }
 
 function clearAllPermissions() {
   formPermissionCodes.value = []
+}
+
+function withPermissionDependencies(codes: string[]) {
+  const selected = new Set(codes)
+  for (const permission of permissions.value) {
+    if (!selected.has(permission.code) || !permissionRequiresRead(permission.action)) continue
+    const parts = permission.action.split('.')
+    const prefix = parts.length > 1 ? parts.slice(0, -1).join('.') : ''
+    for (const candidate of permissions.value) {
+      if (candidate.module !== permission.module) continue
+      if (candidate.action === 'view' || candidate.action === 'read' || (prefix && (candidate.action === `${prefix}.view` || candidate.action === `${prefix}.read`))) {
+        selected.add(candidate.code)
+      }
+    }
+  }
+  return [...selected].sort()
+}
+
+function permissionRequiresRead(action: string) {
+  return ['create', 'update', 'delete', 'deactivate'].includes(action.split('.').at(-1) ?? '')
 }
 
 function validateRole() {
@@ -302,8 +333,25 @@ async function saveRole() {
 }
 
 function askDeactivate(role: RoleRecord) {
+  if (role.is_active && role.user_count > 0) {
+    app.pushToast({ type: 'error', message: app.t('roles.assignedRoleCannotDeactivate') })
+    return
+  }
   targetRole.value = role
   confirmOpen.value = true
+}
+
+function changePageSize(value: number) {
+  pageSize.value = value
+  page.value = 1
+}
+
+function previousPage() {
+  if (page.value > 1) page.value -= 1
+}
+
+function nextPage() {
+  if (page.value < totalPages.value) page.value += 1
 }
 
 async function deactivateRole() {
@@ -321,6 +369,10 @@ async function deactivateRole() {
     saving.value = false
   }
 }
+
+watch(roleSearch, () => {
+  page.value = 1
+})
 
 onMounted(load)
 </script>
@@ -354,8 +406,8 @@ onMounted(load)
 
       <AppEmptyState v-if="!loading && filteredRoles.length === 0" class="mt-5" :title="app.t('roles.empty')" :description="app.t('roles.emptyDescription')" icon="role" />
 
-      <div v-else class="mt-5 hidden overflow-x-auto lg:block">
-        <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+      <div v-else class="mt-5 hidden w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain lg:block">
+        <table class="w-full min-w-[980px] divide-y divide-slate-200 text-sm dark:divide-slate-800">
           <thead class="bg-slate-50 dark:bg-slate-950/70">
             <tr>
               <th class="px-3 py-3 text-left">{{ app.t('roles.name') }}</th>
@@ -367,7 +419,7 @@ onMounted(load)
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-            <tr v-for="role in filteredRoles" :key="role.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
+            <tr v-for="role in visibleRoles" :key="role.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
               <td class="px-3 py-3 pl-8">
                 <div class="font-black">{{ role.name }}</div>
                 <div class="mt-1 max-w-md truncate text-xs text-slate-500 dark:text-slate-400">{{ role.description || app.t('roles.noDescription') }}</div>
@@ -384,7 +436,7 @@ onMounted(load)
               <td class="px-3 py-3">
                 <div class="flex justify-end gap-2">
                   <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('roles.edit')" :aria-label="app.t('roles.edit')" @click="openEditRole(role)" />
-                  <AppButton v-if="canDeactivate" :variant="role.is_active ? 'danger' : 'secondary'" icon="triangle-alert" @click="askDeactivate(role)">
+                  <AppButton v-if="canDeactivate" :variant="role.is_active ? 'danger' : 'secondary'" icon="triangle-alert" :disabled="role.is_active && role.user_count > 0" :title="role.is_active && role.user_count > 0 ? app.t('roles.assignedRoleCannotDeactivate') : undefined" @click="askDeactivate(role)">
                     {{ role.is_active ? app.t('roles.deactivate') : app.t('roles.activate') }}
                   </AppButton>
                 </div>
@@ -395,7 +447,7 @@ onMounted(load)
       </div>
 
       <div class="mt-5 grid gap-3 lg:hidden">
-        <article v-for="role in filteredRoles" :key="role.id" class="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-950/60">
+        <article v-for="role in visibleRoles" :key="role.id" class="rounded-2xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-950/60">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <h3 class="truncate font-black">{{ role.name }}</h3>
@@ -417,11 +469,25 @@ onMounted(load)
           <div class="mt-3 flex flex-wrap gap-2">
             <AppBadge v-if="role.is_system" tone="info">{{ app.t('roles.systemRole') }}</AppBadge>
             <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('roles.edit')" :aria-label="app.t('roles.edit')" @click="openEditRole(role)" />
-            <AppButton v-if="canDeactivate" :variant="role.is_active ? 'danger' : 'secondary'" icon="triangle-alert" @click="askDeactivate(role)">
+            <AppButton v-if="canDeactivate" :variant="role.is_active ? 'danger' : 'secondary'" icon="triangle-alert" :disabled="role.is_active && role.user_count > 0" :title="role.is_active && role.user_count > 0 ? app.t('roles.assignedRoleCannotDeactivate') : undefined" @click="askDeactivate(role)">
               {{ role.is_active ? app.t('roles.deactivate') : app.t('roles.activate') }}
             </AppButton>
           </div>
         </article>
+      </div>
+
+      <div v-if="filteredRoles.length > 0" class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-slate-500 dark:text-slate-400">{{ app.t('roles.show') }}</span>
+          <AppPageSizeSelect :model-value="pageSize" @update:model-value="changePageSize" />
+          <span class="text-slate-500 dark:text-slate-400">{{ app.t('roles.perPage') }}</span>
+          <span class="text-slate-500 dark:text-slate-400">{{ app.t('roles.totalRows') }} {{ filteredRoles.length }}</span>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          <AppButton variant="secondary" :disabled="page <= 1" @click="previousPage">{{ app.t('roles.previous') }}</AppButton>
+          <span class="font-bold text-slate-600 dark:text-slate-300">{{ t('roles.page', { page, total: totalPages }) }}</span>
+          <AppButton variant="secondary" :disabled="page >= totalPages" @click="nextPage">{{ app.t('roles.next') }}</AppButton>
+        </div>
       </div>
     </AppCard>
 
@@ -434,9 +500,10 @@ onMounted(load)
           </div>
           <AppTextarea v-model="form.description" :label="app.t('roles.descriptionField')" :placeholder="app.t('roles.descriptionPlaceholder')" />
           <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-            <input v-model="form.is_active" type="checkbox" />
+            <input v-model="form.is_active" type="checkbox" :disabled="Boolean(editingRole?.is_active && editingRole.user_count > 0)" />
             {{ app.t('roles.active') }}
           </label>
+          <p v-if="editingRole?.is_active && editingRole.user_count > 0" class="text-xs font-semibold text-amber-700 dark:text-amber-200">{{ app.t('roles.assignedRoleCannotDeactivate') }}</p>
         </section>
 
         <section class="grid gap-4">
@@ -444,6 +511,7 @@ onMounted(load)
             <div>
               <h3 class="font-black">{{ app.t('roles.permissions') }}</h3>
               <p class="text-sm text-slate-500 dark:text-slate-400">{{ app.t('roles.permissionModalHint') }}</p>
+              <p class="mt-1 text-xs font-semibold text-brand-700 dark:text-emerald-300">{{ app.t('roles.permissionDependencyHint') }}</p>
             </div>
             <div class="flex flex-wrap gap-2">
               <AppButton type="button" variant="secondary" :disabled="!canAssign" @click="selectAllPermissions">{{ app.t('roles.selectAllPermissions') }}</AppButton>

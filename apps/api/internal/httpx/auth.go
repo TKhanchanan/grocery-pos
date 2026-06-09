@@ -160,6 +160,10 @@ func (s *Server) userDetail(w http.ResponseWriter, r *http.Request) {
 			response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 			return
 		}
+		if current, ok := currentUser(r.Context()); ok && current.ID == id && !body.Active {
+			response.ErrorJSON(w, http.StatusBadRequest, "SELF_DEACTIVATION_FORBIDDEN", "You cannot deactivate your own account.")
+			return
+		}
 		user, err := s.updateUser(r.Context(), id, body)
 		if err != nil {
 			response.ErrorJSON(w, http.StatusBadRequest, "UPDATE_USER_FAILED", err.Error())
@@ -183,6 +187,10 @@ func (s *Server) userStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := readJSON(r, &body); err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	if current, ok := currentUser(r.Context()); ok && current.ID == id && !body.Active {
+		response.ErrorJSON(w, http.StatusBadRequest, "SELF_DEACTIVATION_FORBIDDEN", "You cannot deactivate your own account.")
 		return
 	}
 

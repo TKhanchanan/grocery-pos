@@ -102,6 +102,14 @@ func (s *Server) roleDetail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		before, _ := s.roleByID(r.Context(), id)
+		if !body.IsActive && before.UserCount > 0 {
+			response.ErrorJSON(w, http.StatusBadRequest, "ROLE_HAS_USERS", "Cannot deactivate a role that is assigned to users.")
+			return
+		}
+		if !body.IsActive && s.roleIsLastAdminCapable(r.Context(), id) {
+			response.ErrorJSON(w, http.StatusBadRequest, "LAST_ADMIN_ROLE", "Cannot deactivate the last admin-capable role.")
+			return
+		}
 		role, err := s.updateRole(r.Context(), id, body)
 		if err != nil {
 			response.ErrorJSON(w, http.StatusBadRequest, "ROLE_UPDATE_FAILED", err.Error())
@@ -127,11 +135,19 @@ func (s *Server) roleStatus(w http.ResponseWriter, r *http.Request) {
 		response.ErrorJSON(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 		return
 	}
+	before, err := s.roleByID(r.Context(), id)
+	if err != nil {
+		response.ErrorJSON(w, http.StatusNotFound, "ROLE_NOT_FOUND", "Role not found.")
+		return
+	}
+	if !body.IsActive && before.UserCount > 0 {
+		response.ErrorJSON(w, http.StatusBadRequest, "ROLE_HAS_USERS", "Cannot deactivate a role that is assigned to users.")
+		return
+	}
 	if !body.IsActive && s.roleIsLastAdminCapable(r.Context(), id) {
 		response.ErrorJSON(w, http.StatusBadRequest, "LAST_ADMIN_ROLE", "Cannot deactivate the last admin-capable role.")
 		return
 	}
-	before, _ := s.roleByID(r.Context(), id)
 	if _, err := s.db.ExecContext(r.Context(), `UPDATE roles SET is_active=? WHERE id=?`, body.IsActive, id); err != nil {
 		response.ErrorJSON(w, http.StatusBadRequest, "ROLE_STATUS_FAILED", "Could not update role status.")
 		return
@@ -156,7 +172,11 @@ func (s *Server) deleteRole(w http.ResponseWriter, r *http.Request) {
 		response.ErrorJSON(w, http.StatusNotFound, "ROLE_NOT_FOUND", "Role not found.")
 		return
 	}
-	if role.IsSystem || role.UserCount > 0 || s.roleIsLastAdminCapable(r.Context(), id) {
+	if role.UserCount > 0 {
+		response.ErrorJSON(w, http.StatusBadRequest, "ROLE_HAS_USERS", "Cannot deactivate or delete a role that is assigned to users.")
+		return
+	}
+	if role.IsSystem || s.roleIsLastAdminCapable(r.Context(), id) {
 		if _, err := s.db.ExecContext(r.Context(), `UPDATE roles SET is_active=FALSE WHERE id=?`, id); err != nil {
 			response.ErrorJSON(w, http.StatusBadRequest, "ROLE_DELETE_FAILED", "Could not deactivate role.")
 			return
@@ -452,7 +472,10 @@ func (s *Server) replaceRolePermissions(ctx context.Context, roleID uint64, perm
 	if err != nil {
 		return nil, err
 	}
-	codes := normalizePermissionCodes(permissionCodes)
+	codes, err := s.includePermissionDependencies(ctx, normalizePermissionCodes(permissionCodes))
+	if err != nil {
+		return nil, err
+	}
 	if role.Code == "ADMIN" && !contains(codes, "roles.assign_permissions") {
 		return nil, errors.New("ADMIN role must keep roles.assign_permissions")
 	}
@@ -486,6 +509,68 @@ func (s *Server) replaceRolePermissions(ctx context.Context, roleID uint64, perm
 		return nil, errors.New("at least one active user must keep admin role management permissions")
 	}
 	return s.permissionsForRole(ctx, roleID)
+}
+
+func (s *Server) includePermissionDependencies(ctx context.Context, codes []string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT code, module, action FROM permissions`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type permissionInfo struct {
+		code   string
+		module string
+		action string
+	}
+	permissions := []permissionInfo{}
+	selected := map[string]bool{}
+	for _, code := range codes {
+		selected[code] = true
+	}
+	for rows.Next() {
+		var permission permissionInfo
+		if err := rows.Scan(&permission.code, &permission.module, &permission.action); err != nil {
+			return nil, err
+		}
+		permissions = append(permissions, permission)
+	}
+
+	for _, permission := range permissions {
+		if !selected[permission.code] || !permissionRequiresRead(permission.action) {
+			continue
+		}
+		prefix := ""
+		if index := strings.LastIndex(permission.action, "."); index >= 0 {
+			prefix = permission.action[:index]
+		}
+		for _, candidate := range permissions {
+			if candidate.module != permission.module {
+				continue
+			}
+			if candidate.action == "view" || candidate.action == "read" ||
+				(prefix != "" && (candidate.action == prefix+".view" || candidate.action == prefix+".read")) {
+				selected[candidate.code] = true
+			}
+		}
+	}
+
+	withDependencies := make([]string, 0, len(selected))
+	for code := range selected {
+		withDependencies = append(withDependencies, code)
+	}
+	sort.Strings(withDependencies)
+	return withDependencies, nil
+}
+
+func permissionRequiresRead(action string) bool {
+	parts := strings.Split(action, ".")
+	switch parts[len(parts)-1] {
+	case "create", "update", "delete", "deactivate":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Server) rolesForUser(ctx context.Context, user User) []UserRole {
