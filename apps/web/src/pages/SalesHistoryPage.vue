@@ -172,11 +172,17 @@ onMounted(async () => {
     <PageHeader :title="app.t('sales.title')" :eyebrow="app.t('sales.eyebrow')" :description="app.t('sales.description')" icon="purchase-order" />
 
     <div class="grid min-w-0 max-w-full gap-4">
+      <div class="grid gap-3 md:grid-cols-3">
+        <StatCard :label="app.t('sales.completedSales')" :value="totals.completedCount" :helper="app.t('sales.completedHelper')" icon="receipt-text" />
+        <StatCard :label="app.t('sales.completedTotal')" :value="moneyWithCurrency(totals.completedTotal)" :helper="app.t('sales.totalHelper')" icon="banknote" tone="success" />
+        <StatCard :label="app.t('sales.cancelled')" :value="totals.cancelledCount" :helper="app.t('sales.cancelledHelper')" icon="circle-x" tone="danger" />
+      </div>
+
       <AppCard class="relative z-20 min-w-0 max-w-full overflow-visible dark:bg-slate-900/80">
         <div class="grid min-w-0 max-w-full gap-3 lg:grid-cols-2 2xl:grid-cols-4">
           <div class="grid min-w-0 max-w-full gap-3 sm:grid-cols-2 lg:col-span-2 2xl:col-span-4 2xl:grid-cols-5">
             <AppInput v-model="filters.receipt_no" :label="app.t('sales.receiptNo')" :placeholder="app.t('sales.receiptPlaceholder')" />
-            <AppInput v-model="filters.cashier_id" :label="app.t('sales.cashierId')" :placeholder="app.t('sales.cashierPlaceholder')" />
+            <!-- <AppInput v-model="filters.cashier_id" :label="app.t('sales.cashierId')" :placeholder="app.t('sales.cashierPlaceholder')" /> -->
             <AppSelect v-model="filters.location_id" :label="app.t('sales.location')">
               <option value="">{{ app.t('sales.locationPlaceholder') }}</option>
               <option v-for="location in locations" :key="location.id" :value="String(location.id)">{{ location.name }}</option>
@@ -214,12 +220,6 @@ onMounted(async () => {
           </div>
         </div>
       </AppCard>
-
-      <div class="grid gap-3 md:grid-cols-3">
-        <StatCard :label="app.t('sales.completedSales')" :value="totals.completedCount" :helper="app.t('sales.completedHelper')" icon="receipt-text" />
-        <StatCard :label="app.t('sales.completedTotal')" :value="moneyWithCurrency(totals.completedTotal)" :helper="app.t('sales.totalHelper')" icon="banknote" tone="success" />
-        <StatCard :label="app.t('sales.cancelled')" :value="totals.cancelledCount" :helper="app.t('sales.cancelledHelper')" icon="circle-x" tone="danger" />
-      </div>
 
       <div v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ error }}</div>
       <div v-if="loading" class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:bg-slate-900 dark:text-slate-300">{{ app.t('sales.loading') }}</div>

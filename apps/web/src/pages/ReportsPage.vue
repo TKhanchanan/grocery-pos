@@ -502,6 +502,12 @@ onMounted(async () => {
         </button>
       </div>
 
+      <div v-if="hasVisibleReports" class="grid gap-3 md:grid-cols-2"
+        :class="kpiCards.length === 3 ? 'xl:grid-cols-3' : 'xl:grid-cols-4'">
+        <StatCard v-for="card in kpiCards" :key="card.label" :label="card.label" :value="card.value"
+          :helper="card.helper" :icon="card.icon" :tone="card.tone" />
+      </div>
+
       <AppCard v-if="hasVisibleReports" class="relative z-20 min-w-0 max-w-full overflow-visible dark:bg-slate-900/80">
         <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -539,10 +545,6 @@ onMounted(async () => {
           </div>
         </div>
       </AppCard>
-
-      <div v-if="hasVisibleReports" class="grid gap-3 md:grid-cols-2" :class="kpiCards.length === 3 ? 'xl:grid-cols-3' : 'xl:grid-cols-4'">
-        <StatCard v-for="card in kpiCards" :key="card.label" :label="card.label" :value="card.value" :helper="card.helper" :icon="card.icon" :tone="card.tone" />
-      </div>
 
       <div v-if="error" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
