@@ -1,0 +1,333 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { apiClient, patchJSON, postJSON } from '../api/client'
+import AppBadge from '../components/AppBadge.vue'
+import AppButton from '../components/AppButton.vue'
+import AppCard from '../components/AppCard.vue'
+import AppEmptyState from '../components/AppEmptyState.vue'
+import AppInput from '../components/AppInput.vue'
+import AppLoadingState from '../components/AppLoadingState.vue'
+import AppModal from '../components/AppModal.vue'
+import AppPageSizeSelect from '../components/AppPageSizeSelect.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import PageHeader from '../components/PageHeader.vue'
+import type { TranslationKey } from '../i18n'
+import { useAppStore } from '../stores/app'
+import { useAuthStore } from '../stores/auth'
+import type { Category } from '../types/navigation'
+
+const app = useAppStore()
+const auth = useAuthStore()
+const categories = ref<Category[]>([])
+const loading = ref(false)
+const saving = ref(false)
+const statusSaving = ref(false)
+const error = ref('')
+const search = ref('')
+const modalOpen = ref(false)
+const saveConfirmOpen = ref(false)
+const nameError = ref('')
+const pendingStatusCategory = ref<Category | null>(null)
+const page = ref(1)
+const pageSize = ref(10)
+const form = reactive({ id: 0, name: '', description: '' })
+
+const canCreate = computed(() => auth.hasPermission('categories.create'))
+const canUpdate = computed(() => auth.hasPermission('categories.update'))
+const canDeactivate = computed(() => auth.hasPermission('categories.deactivate'))
+const modalTitle = computed(() => form.id ? app.t('categories.editTitle') : app.t('categories.create'))
+const saveConfirmTitle = computed(() => form.id ? app.t('categories.confirmUpdateTitle') : app.t('categories.confirmCreateTitle'))
+const saveConfirmMessage = computed(() => t('categories.confirmSaveMessage', { name: form.name.trim() || app.t('categories.name') }))
+const filteredCategories = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  if (!query) return categories.value
+  return categories.value.filter((item) => `${item.name} ${item.description}`.toLowerCase().includes(query))
+})
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredCategories.value.length / pageSize.value)))
+const visibleCategories = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filteredCategories.value.slice(start, start + pageSize.value)
+})
+const pendingStatusNextActive = computed(() => pendingStatusCategory.value ? !pendingStatusCategory.value.is_active : false)
+const pendingStatusMessage = computed(() => pendingStatusNextActive.value ? app.t('categories.confirmActivate') : app.t('categories.confirmDeactivate'))
+const pendingStatusLabel = computed(() => pendingStatusNextActive.value ? app.t('categories.activate') : app.t('categories.deactivate'))
+
+function t(key: TranslationKey, params: Record<string, string | number> = {}) {
+  let text = String(app.t(key))
+  for (const [name, value] of Object.entries(params)) text = text.replaceAll(`{${name}}`, String(value))
+  return text
+}
+
+async function load() {
+  loading.value = true
+  error.value = ''
+  try {
+    categories.value = await apiClient<Category[]>('/v1/categories')
+    page.value = Math.min(page.value, totalPages.value)
+  } catch (err) {
+    error.value = friendlyError(err, 'categories.loadFailed')
+  } finally {
+    loading.value = false
+  }
+}
+
+function friendlyError(err: unknown, fallback: 'categories.loadFailed' | 'categories.saveFailed' | 'categories.statusFailed') {
+  const message = err instanceof Error ? err.message : app.t(fallback)
+  if (message.toLowerCase().includes('permission')) return app.t('categories.noPermission')
+  if (message.toLowerCase().includes('active products')) return app.t('categories.activeProductsError')
+  return message
+}
+
+function changePageSize(value: number) {
+  pageSize.value = value
+  page.value = 1
+}
+
+function previousPage() {
+  if (page.value > 1) page.value -= 1
+}
+
+function nextPage() {
+  if (page.value < totalPages.value) page.value += 1
+}
+
+function reset() {
+  Object.assign(form, { id: 0, name: '', description: '' })
+  nameError.value = ''
+}
+
+function openCreate() {
+  reset()
+  modalOpen.value = true
+}
+
+function openEdit(item: Category) {
+  Object.assign(form, { id: item.id, name: item.name, description: item.description })
+  nameError.value = ''
+  modalOpen.value = true
+}
+
+function closeModal() {
+  if (saving.value) return
+  saveConfirmOpen.value = false
+  modalOpen.value = false
+  reset()
+}
+
+function validate() {
+  nameError.value = form.name.trim() ? '' : app.t('categories.nameRequired')
+  return !nameError.value
+}
+
+function openSaveConfirm() {
+  if (saving.value) return
+  if (!validate()) return
+  saveConfirmOpen.value = true
+}
+
+async function save() {
+  if (!validate()) return
+  saving.value = true
+  error.value = ''
+  const toastMessage = form.id ? app.t('categories.updated') : app.t('categories.created')
+  try {
+    const payload = { name: form.name.trim(), description: form.description.trim() }
+    if (form.id) {
+      await patchJSON<Category>(`/v1/categories/${form.id}`, payload)
+    } else {
+      await postJSON<Category>('/v1/categories', payload)
+    }
+    await load()
+    saveConfirmOpen.value = false
+    modalOpen.value = false
+    reset()
+    app.pushToast({ type: 'success', message: toastMessage })
+  } catch (err) {
+    error.value = friendlyError(err, 'categories.saveFailed')
+    app.pushToast({ type: 'error', message: app.t('categories.saveFailed'), description: error.value })
+  } finally {
+    saving.value = false
+  }
+}
+
+function requestStatusChange(item: Category) {
+  pendingStatusCategory.value = item
+}
+
+function closeStatusDialog() {
+  if (statusSaving.value) return
+  pendingStatusCategory.value = null
+}
+
+async function confirmStatusChange() {
+  const item = pendingStatusCategory.value
+  if (!item) return
+  statusSaving.value = true
+  error.value = ''
+  try {
+    await patchJSON<Category>(`/v1/categories/${item.id}/status`, { is_active: !item.is_active })
+    app.pushToast({ type: 'success', message: app.t('categories.statusUpdated') })
+    pendingStatusCategory.value = null
+    await load()
+  } catch (err) {
+    error.value = friendlyError(err, 'categories.statusFailed')
+    app.pushToast({ type: 'error', message: app.t('categories.statusFailed'), description: error.value })
+  } finally {
+    statusSaving.value = false
+  }
+}
+
+watch(search, () => {
+  page.value = 1
+})
+
+onMounted(load)
+</script>
+
+<template>
+  <section class="min-w-0 max-w-full">
+    <PageHeader :title="app.t('categories.title')" :eyebrow="app.t('categories.eyebrow')" :description="app.t('categories.description')" icon="tags">
+      <AppButton v-if="canCreate" icon="plus" @click="openCreate">{{ app.t('categories.add') }}</AppButton>
+    </PageHeader>
+
+    <div class="grid min-w-0 max-w-full gap-4">
+      <AppCard class="min-w-0 max-w-full dark:bg-slate-900/80">
+        <div class="grid gap-3">
+          <AppInput v-model="search" :label="app.t('categories.search')" :placeholder="app.t('categories.searchPlaceholder')" />
+        </div>
+      </AppCard>
+
+      <AppCard class="min-w-0 max-w-full overflow-hidden dark:bg-slate-900/80">
+        <div v-if="error" class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">{{ error }}</div>
+        <AppLoadingState v-if="loading" :label="app.t('categories.loading')" />
+        <AppEmptyState v-else-if="filteredCategories.length === 0" :title="app.t('categories.empty')" :description="app.t('categories.description')">
+          <template v-if="canCreate && categories.length === 0">
+          </template>
+        </AppEmptyState>
+
+        <div v-else class="min-w-0 max-w-full">
+          <div class="hidden w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain md:block">
+            <table class="w-full min-w-[960px] table-fixed divide-y divide-slate-200 text-sm dark:divide-slate-800">
+              <colgroup>
+                <col class="w-[220px]" />
+                <col />
+                <col class="w-[130px]" />
+                <col class="w-[200px]" />
+              </colgroup>
+              <thead class="bg-slate-50 dark:bg-slate-950/70">
+                <tr>
+                  <th class="px-3 py-3 text-left font-black">{{ app.t('categories.name') }}</th>
+                  <th class="px-3 py-3 text-left font-black">{{ app.t('categories.descriptionField') }}</th>
+                  <th class="px-3 py-3 text-left font-black">{{ app.t('categories.status') }}</th>
+                  <th class="px-3 py-3 text-right font-black">{{ app.t('categories.actions') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tr v-for="item in visibleCategories" :key="item.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
+                  <td class="px-3 py-3">
+                    <p class="truncate font-semibold" :title="item.name">{{ item.name }}</p>
+                  </td>
+                  <td class="px-3 py-3 text-slate-600 dark:text-slate-300">
+                    <p class="line-clamp-2 break-words [overflow-wrap:anywhere]" :title="item.description || app.t('categories.noDescription')">
+                      {{ item.description || app.t('categories.noDescription') }}
+                    </p>
+                  </td>
+                  <td class="px-3 py-3">
+                    <AppBadge :tone="item.is_active ? 'success' : 'neutral'">{{ item.is_active ? app.t('categories.active') : app.t('categories.inactive') }}</AppBadge>
+                  </td>
+                  <td class="w-[168px] px-3 py-3 text-right">
+                    <div class="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
+                      <AppButton v-if="canUpdate"
+                        class="!box-border !h-10 !min-h-10 !w-10 !min-w-10 !shrink-0 !px-0 !py-0" variant="secondary"
+                        icon="settings" :title="app.t('categories.edit')" :aria-label="app.t('categories.edit')"
+                        @click="openEdit(item)" />
+
+                      <AppButton v-if="canDeactivate"
+                        class="!box-border !h-10 !min-h-10 !w-[112px] !min-w-[112px] !shrink-0 !px-3 !py-0 !leading-none"
+                        :variant="item.is_active ? 'danger' : 'secondary'" @click="requestStatusChange(item)">
+                        <span class="block w-full truncate text-center">
+                          {{ item.is_active ? app.t('categories.deactivate') : app.t('categories.activate') }}
+                        </span>
+                      </AppButton>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grid gap-3 md:hidden">
+            <article v-for="item in visibleCategories" :key="item.id" class="rounded-2xl border border-slate-200 bg-white/65 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/60">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h2 class="truncate font-black" :title="item.name">{{ item.name }}</h2>
+                  <p class="mt-1 line-clamp-3 break-words text-sm text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400" :title="item.description || app.t('categories.noDescription')">
+                    {{ item.description || app.t('categories.noDescription') }}
+                  </p>
+                </div>
+                <AppBadge :tone="item.is_active ? 'success' : 'neutral'">{{ item.is_active ? app.t('categories.active') : app.t('categories.inactive') }}</AppBadge>
+              </div>
+              <div class="mt-4 flex flex-wrap gap-2">
+                <AppButton v-if="canUpdate" class="!h-10 !min-h-10 !w-10 !px-0 !py-0" variant="secondary" icon="settings" :title="app.t('categories.edit')" :aria-label="app.t('categories.edit')" @click="openEdit(item)" />
+                <AppButton v-if="canDeactivate" :variant="item.is_active ? 'danger' : 'secondary'" @click="requestStatusChange(item)">
+                  {{ item.is_active ? app.t('categories.deactivate') : app.t('categories.activate') }}
+                </AppButton>
+              </div>
+            </article>
+          </div>
+
+          <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('categories.show') }}</span>
+              <AppPageSizeSelect :model-value="pageSize" @update:model-value="changePageSize" />
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('categories.perPage') }}</span>
+              <span class="text-slate-500 dark:text-slate-400">{{ app.t('categories.totalRows') }} {{ filteredCategories.length }}</span>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+              <AppButton variant="secondary" :disabled="page <= 1" @click="previousPage">{{ app.t('categories.previous') }}</AppButton>
+              <span class="font-bold text-slate-600 dark:text-slate-300">{{ t('categories.page', { page, total: totalPages }) }}</span>
+              <AppButton variant="secondary" :disabled="page >= totalPages" @click="nextPage">{{ app.t('categories.next') }}</AppButton>
+            </div>
+          </div>
+        </div>
+      </AppCard>
+    </div>
+
+    <AppModal :open="modalOpen" :title="modalTitle" :description="app.t('categories.modalDescription')" :close-label="app.t('categories.cancel')" size="lg" @close="closeModal">
+      <form class="grid gap-4" @submit.prevent="openSaveConfirm">
+        <div class="grid gap-3 rounded-2xl bg-slate-50/80 p-4 dark:bg-slate-950/45">
+          <AppInput v-model="form.name" :label="app.t('categories.name')" :placeholder="app.t('categories.namePlaceholder')" :error="nameError" />
+          <AppInput v-model="form.description" :label="app.t('categories.descriptionField')" :placeholder="app.t('categories.descriptionPlaceholder')" />
+        </div>
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <AppButton class="w-full sm:w-auto" type="button" variant="secondary" :disabled="saving" @click="closeModal">{{ app.t('categories.cancel') }}</AppButton>
+          <AppButton class="w-full sm:w-auto" type="submit" :loading="saving" :disabled="saving || (!form.id && !canCreate) || (Boolean(form.id) && !canUpdate)" icon="check-circle">{{ app.t('categories.save') }}</AppButton>
+        </div>
+      </form>
+    </AppModal>
+
+    <ConfirmDialog
+      :open="saveConfirmOpen"
+      :title="saveConfirmTitle"
+      :message="saveConfirmMessage"
+      :confirm-label="app.t('categories.confirm')"
+      :cancel-label="app.t('categories.cancel')"
+      :destructive="false"
+      :loading="saving"
+      @close="saveConfirmOpen = false"
+      @confirm="save"
+    />
+
+    <ConfirmDialog
+      :open="Boolean(pendingStatusCategory)"
+      :title="app.t('categories.confirmTitle')"
+      :message="pendingStatusMessage"
+      :confirm-label="pendingStatusLabel"
+      :cancel-label="app.t('categories.cancel')"
+      :destructive="!pendingStatusNextActive"
+      :loading="statusSaving"
+      @close="closeStatusDialog"
+      @confirm="confirmStatusChange"
+    />
+  </section>
+</template>

@@ -12,8 +12,11 @@ services:
     command: ["mysqld", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+      - ./apps/api/migrations/001_init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./apps/api/seeds/001_demo.sql:/docker-entrypoint-initdb.d/02-demo.sql:ro
+      - ./apps/api/migrations/011_dynamic_rbac.sql:/docker-entrypoint-initdb.d/03-dynamic-rbac.sql:ro
+      - ./apps/api/migrations/012_profile_avatar.sql:/docker-entrypoint-initdb.d/04-profile-avatar.sql:ro
+      - ./apps/api/migrations/013_product_images.sql:/docker-entrypoint-initdb.d/05-product-images.sql:ro
 
 volumes:
   mysql-data:
