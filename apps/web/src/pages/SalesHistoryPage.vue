@@ -180,7 +180,7 @@ onMounted(async () => {
 
       <AppCard class="relative z-20 min-w-0 max-w-full overflow-visible dark:bg-slate-900/80">
         <div class="grid min-w-0 max-w-full gap-3 lg:grid-cols-2 2xl:grid-cols-4">
-          <div class="grid min-w-0 max-w-full gap-3 sm:grid-cols-2 lg:col-span-2 2xl:col-span-4 2xl:grid-cols-5">
+          <div class="grid min-w-0 max-w-full gap-3 sm:grid-cols-2 lg:col-span-2 2xl:col-span-4 2xl:grid-cols-4">
             <AppInput v-model="filters.receipt_no" :label="app.t('sales.receiptNo')" :placeholder="app.t('sales.receiptPlaceholder')" />
             <!-- <AppInput v-model="filters.cashier_id" :label="app.t('sales.cashierId')" :placeholder="app.t('sales.cashierPlaceholder')" /> -->
             <AppSelect v-model="filters.location_id" :label="app.t('sales.location')">
