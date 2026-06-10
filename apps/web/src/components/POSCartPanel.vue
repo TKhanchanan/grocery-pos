@@ -80,13 +80,22 @@ function setQuantity(productId: number, quantity: number) {
     />
 
     <div v-else class="mt-4 grid max-h-[42vh] gap-3 overflow-y-auto pr-1 xl:max-h-[45vh]">
-      <article v-for="item in cart.items" :key="item.productId" class="pos-cart-item rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-950/45">
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <h3 class="truncate font-bold">{{ item.name }}</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">{{ item.sku }} · {{ app.t('pos.stock') }} {{ t('pos.stockLine', { stock: item.stock, unit: item.unit }) }}</p>
+      <article v-for="item in cart.items" :key="item.productId"
+        class="pos-cart-item min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-950/45">
+        <div class="flex min-w-0 items-start justify-between gap-3">
+          <div class="min-w-0 flex-1 overflow-hidden">
+            <h3 class="truncate font-bold leading-[1.35]" :title="item.name">
+              {{ item.name }}
+            </h3>
+
+            <p class="truncate text-xs text-slate-500 dark:text-slate-400"
+              :title="`${item.sku} · ${app.t('pos.stock')} ${t('pos.stockLine', { stock: item.stock, unit: item.unit })}`">
+              {{ item.sku }} · {{ app.t('pos.stock') }} {{ t('pos.stockLine', { stock: item.stock, unit: item.unit }) }}
+            </p>
           </div>
-          <button class="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/15" :aria-label="app.t('pos.remove')" @click="cart.removeItem(item.productId)">
+          <button
+            class="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/15"
+            :aria-label="app.t('pos.remove')" @click="cart.removeItem(item.productId)">
             <AppIcon name="x" :size="18" />
           </button>
         </div>
