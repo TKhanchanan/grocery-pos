@@ -46,10 +46,11 @@ func CORS(allowedOrigins string) Middleware {
 			origin := r.Header.Get("Origin")
 			if origin != "" && isAllowed(origin, origins) {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type,Accept,Origin,X-Requested-With")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Add("Vary", "Origin")
 			}
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			if r.Method == http.MethodOptions {
 				response.NoContent(w)
 				return
@@ -73,7 +74,7 @@ func splitCSV(value string) []string {
 
 func isAllowed(origin string, allowed []string) bool {
 	for _, item := range allowed {
-		if item == "*" || item == origin {
+		if item == origin {
 			return true
 		}
 	}

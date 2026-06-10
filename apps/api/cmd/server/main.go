@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"grocery-pos/apps/api/internal/config"
 	"grocery-pos/apps/api/internal/database"
@@ -25,9 +26,14 @@ func main() {
 	}
 
 	server := httpx.NewServer(cfg, db)
+	listenAddr := cfg.ListenAddr()
 
-	log.Printf("Grocery POS API %s listening on %s", cfg.AppVersion, cfg.APIAddr)
-	if err := http.ListenAndServe(cfg.APIAddr, server.Routes()); err != nil {
+	log.Printf("APP_ENV=%s", cfg.Env)
+	log.Printf("PORT set=%t", strings.TrimSpace(cfg.Port) != "")
+	log.Printf("CORS_ORIGINS=%s", cfg.CORSOrigins)
+	log.Printf("API base path=/api/v1")
+	log.Printf("Grocery POS API %s listening on %s", cfg.AppVersion, listenAddr)
+	if err := http.ListenAndServe(listenAddr, server.Routes()); err != nil {
 		log.Fatal(err)
 	}
 }

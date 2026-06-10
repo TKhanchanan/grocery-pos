@@ -138,9 +138,9 @@ func (s *Server) Routes() http.Handler {
 
 	return middleware.Chain(
 		mux,
+		middleware.CORS(s.cfg.CORSOrigins),
 		middleware.Recover,
 		middleware.RequestLogger,
-		middleware.CORS(s.cfg.CORSOrigins),
 	)
 }
 

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 )
 
 func main() {
@@ -18,7 +18,10 @@ func main() {
 		log.Fatal("DATABASE_URL is required")
 	}
 
-	dsn = ensureMultiStatements(dsn)
+	dsn, err := ensureMultiStatements(dsn)
+	if err != nil {
+		log.Fatalf("invalid DATABASE_URL: %v", err)
+	}
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -66,15 +69,11 @@ func main() {
 	fmt.Println("seed applied")
 }
 
-func ensureMultiStatements(dsn string) string {
-	if strings.Contains(dsn, "multiStatements=") {
-		return dsn
+func ensureMultiStatements(dsn string) (string, error) {
+	cfg, err := mysql.ParseDSN(strings.TrimSpace(dsn))
+	if err != nil {
+		return "", err
 	}
-
-	separator := "?"
-	if strings.Contains(dsn, "?") {
-		separator = "&"
-	}
-
-	return dsn + separator + "multiStatements=true"
+	cfg.MultiStatements = true
+	return cfg.FormatDSN(), nil
 }
