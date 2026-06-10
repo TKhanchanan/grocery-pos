@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
-	"os"
 	"time"
 
 	"grocery-pos/apps/api/internal/config"
@@ -133,7 +132,6 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/settings/line", s.requirePermission(s.lineSettings, "settings.line.update"))
 	mux.HandleFunc("POST /api/v1/settings/line/test", s.requirePermission(s.testLineNotification, "settings.line.test"))
 	mux.HandleFunc("GET /api/v1/notification-logs", s.requirePermission(s.notificationLogs, "notifications.view"))
-	_ = os.MkdirAll(s.cfg.UploadDir, 0755)
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.cfg.UploadDir))))
 	mux.HandleFunc("/", s.notFound)
 

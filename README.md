@@ -106,3 +106,31 @@ go run ./cmd/migrate
 ```
 
 The migrations keep the legacy `users.role` column for compatibility while adding dynamic RBAC tables, profile avatar fields, and product image fields.
+
+## Railway Deployment
+
+Configure the API service with root directory `/apps/api` and keep migrations and seed data in the pre-deploy command:
+
+```text
+Build Command:
+mkdir -p bin && go build -ldflags="-w -s" -o bin/server ./cmd/server && go build -ldflags="-w -s" -o bin/migrate ./cmd/migrate && go build -ldflags="-w -s" -o bin/seed ./cmd/seed
+
+Pre-deploy Command:
+./bin/migrate && ./bin/seed
+
+Start Command:
+./bin/server
+```
+
+Product and profile images require persistent storage:
+
+1. Add a Railway Volume to the API service.
+2. Set the Volume mount path to `/app/storage/uploads`.
+3. Set the API environment variable:
+
+```text
+APP_ENV=production
+UPLOAD_DIR=/app/storage/uploads
+```
+
+The API stores private filesystem paths in `image_path` and exposes stable public URLs such as `/uploads/products/<filename>` through the `/uploads/` route. Do not use the repository or a temporary directory as `UPLOAD_DIR` in production.

@@ -12,6 +12,9 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.PrepareUploadDir(); err != nil {
+		log.Fatalf("prepare upload directory: %v", err)
+	}
 
 	db, err := database.Open(cfg.DatabaseURL)
 	if err != nil {
@@ -25,6 +28,7 @@ func main() {
 	log.Printf("APP_ENV=%s", cfg.Env)
 	log.Printf("PORT set=%t", strings.TrimSpace(cfg.Port) != "")
 	log.Printf("CORS_ORIGINS=%s", cfg.CORSOrigins)
+	log.Printf("upload dir: %s", cfg.UploadDir)
 	log.Printf("API base path=/api/v1")
 	log.Printf("Grocery POS API %s listening on %s", cfg.AppVersion, listenAddr)
 	if err := http.ListenAndServe(listenAddr, server.Routes()); err != nil {

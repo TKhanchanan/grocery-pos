@@ -326,7 +326,11 @@ func (s *Server) uploadProductImage(w http.ResponseWriter, r *http.Request, id u
 		response.ErrorJSON(w, http.StatusInternalServerError, "PRODUCT_IMAGE_UPLOAD_FAILED", "Could not save product image.")
 		return
 	}
-	_ = out.Close()
+	if err := out.Close(); err != nil {
+		_ = os.Remove(path)
+		response.ErrorJSON(w, http.StatusInternalServerError, "PRODUCT_IMAGE_UPLOAD_FAILED", "Could not finish saving product image.")
+		return
+	}
 
 	oldPath := productImagePath(r.Context(), s.db, id)
 	imageURL := "/uploads/products/" + name

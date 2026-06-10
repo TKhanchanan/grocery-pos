@@ -61,6 +61,8 @@ watch(() => [props.src, props.updatedAt], () => {
       :src="resolvedSrc"
       :alt="name"
       class="h-full w-full object-cover"
+      loading="lazy"
+      decoding="async"
       @error="failed = true"
     />
     <AppIcon v-else name="package" :size="iconSize" />
