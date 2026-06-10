@@ -664,29 +664,32 @@ watch(() => route.query.tab, async () => {
           <AppEmptyState v-else-if="purchaseOrders.length === 0" :title="app.t('procurement.noPO')" :description="app.t('procurement.noPODescription')" icon="clipboard-list" />
           <div v-else class="min-w-0 max-w-full">
             <div class="hidden w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable] md:block">
-              <table class="w-full min-w-[1180px] divide-y divide-slate-200 text-sm dark:divide-slate-800">
+              <table class="w-full min-w-[1480px] divide-y divide-slate-200 whitespace-nowrap text-sm dark:divide-slate-800">
                 <thead class="bg-slate-50 dark:bg-slate-950/70">
                   <tr>
-                    <th class="px-3 py-3 text-left">{{ app.t('procurement.poNo') }}</th>
-                    <th class="px-3 py-3 text-left">{{ app.t('procurement.supplier') }}</th>
-                    <th class="px-3 py-3 text-left">{{ app.t('procurement.status') }}</th>
-                    <th class="px-3 py-3 text-right">{{ app.t('procurement.items') }}</th>
-                    <th class="px-3 py-3 text-right">{{ app.t('procurement.total') }}</th>
-                    <th class="px-3 py-3 pl-8 text-left">{{ app.t('procurement.createdDate') }}</th>
-                    <th class="px-3 py-3 text-right">{{ app.t('procurement.actions') }}</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">{{ app.t('procurement.poNo') }}</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">{{ app.t('procurement.supplier') }}</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">{{ app.t('procurement.status') }}</th>
+                    <th class="px-3 py-3 text-right whitespace-nowrap">{{ app.t('procurement.items') }}</th>
+                    <th class="px-3 py-3 text-right whitespace-nowrap">{{ app.t('procurement.total') }}</th>
+                    <th class="px-3 py-3 pl-8 text-left whitespace-nowrap">{{ app.t('procurement.createdDate') }}</th>
+                    <th class="px-3 py-3 text-right whitespace-nowrap">{{ app.t('procurement.actions') }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                   <tr v-for="po in visiblePurchaseOrders" :key="po.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
-                    <td class="px-3 py-3 font-black">{{ po.po_number }}</td>
+                    <td class="px-3 py-3 font-black whitespace-nowrap">{{ po.po_number }}</td>
                     <td class="px-3 py-3">
-                      <p class="font-semibold">{{ po.supplier_name }}</p>
-                      <p class="text-xs text-slate-500 dark:text-slate-400">{{ po.location_name }}</p>
+                      <div class="flex items-center gap-2 whitespace-nowrap">
+                        <span class="font-semibold">{{ po.supplier_name }}</span>
+                        <span class="text-xs text-slate-400">·</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">{{ po.location_name }}</span>
+                      </div>
                     </td>
-                    <td class="px-3 py-3"><AppBadge :tone="statusTone(po.status)">{{ statusLabel(po.status) }}</AppBadge></td>
-                    <td class="px-3 py-3 text-right">{{ po.items.length.toLocaleString(locale) }}</td>
-                    <td class="px-3 py-3 text-right font-semibold">{{ money(po.total_cost) }}</td>
-                    <td class="px-3 py-3 pl-8">{{ formatDate(po.created_at) }}</td>
+                    <td class="px-3 py-3 whitespace-nowrap"><AppBadge :tone="statusTone(po.status)">{{ statusLabel(po.status) }}</AppBadge></td>
+                    <td class="px-3 py-3 text-right whitespace-nowrap">{{ po.items.length.toLocaleString(locale) }}</td>
+                    <td class="px-3 py-3 text-right font-semibold whitespace-nowrap">{{ money(po.total_cost) }}</td>
+                    <td class="px-3 py-3 pl-8 whitespace-nowrap">{{ formatDate(po.created_at) }}</td>
                     <td class="px-3 py-3">
                       <div class="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
                         <AppButton class="!h-10 !min-h-10 whitespace-nowrap !py-0" variant="secondary" @click="showPO(po)">{{ app.t('procurement.detail') }}</AppButton>
