@@ -419,23 +419,34 @@ onBeforeUnmount(() => {
           </div>
           <AppEmptyState v-if="stockRiskItems.length === 0" class="mt-4" :title="app.t('dashboard.empty.stockHealthyTitle')" :description="app.t('dashboard.empty.stockHealthyDescription')" />
           <div v-else class="mt-5 grid gap-3">
-            <article v-for="item in stockRiskItems" :key="`${item.product_id}-${item.location_id}`" class="nested-border-card min-w-0 max-w-full overflow-hidden rounded-2xl border p-4">
+            <article v-for="item in stockRiskItems" :key="`${item.product_id}-${item.location_id}`" class="nested-border-card overflow-hidden rounded-2xl border p-4">
               <div class="flex min-w-0 items-start justify-between gap-3">
                 <div class="flex min-w-0 flex-1 items-start gap-3 overflow-hidden">
-                  <ProductAvatar :src="item.image_url" :updated-at="item.image_updated_at" :name="item.product_name" size="sm" shape="square" />
-                  <div class="min-w-0 flex-1">
-                    <AppEllipsisText as="h3" :text="item.product_name" :lines="2" class="font-black" />
-                    <AppEllipsisText as="p" :text="`${item.location_name} · ${item.sku}`" class="text-sm text-slate-500 dark:text-slate-400" />
+                  <ProductAvatar class="shrink-0" :src="item.image_url" :updated-at="item.image_updated_at"
+                    :name="item.product_name" size="sm" shape="square" />
+
+                  <div class="min-w-0 flex-1 overflow-hidden">
+                    <h3 class="truncate font-black" :title="item.product_name">
+                      {{ item.product_name }}
+                    </h3>
+
+                    <p class="truncate text-sm text-slate-500 dark:text-slate-400"
+                      :title="`${item.location_name} · ${item.sku}`">
+                      {{ item.location_name }} · {{ item.sku }}
+                    </p>
                   </div>
                 </div>
-                <AppBadge :tone="stockTone(item.stock_status)">{{ stockStatusLabel(item.stock_status) }}</AppBadge>
+
+                <AppBadge class="shrink-0 whitespace-nowrap" :tone="stockTone(item.stock_status)">
+                  {{ stockStatusLabel(item.stock_status) }}
+                </AppBadge>
               </div>
-              <div class="mt-4 flex min-w-0 items-end justify-between gap-3">
-                <div class="shrink-0">
+              <div class="mt-4 flex items-end justify-between gap-3">
+                <div>
                   <p class="text-xs text-slate-500 dark:text-slate-400">{{ app.t('dashboard.inventory.currentStock') }}</p>
                   <p class="text-3xl font-black" :class="item.quantity === 0 ? 'text-red-700 dark:text-red-300' : 'text-slate-950 dark:text-slate-50'">{{ item.quantity }}</p>
                 </div>
-                <p class="min-w-0 text-right text-xs text-slate-500 dark:text-slate-400">{{ t('dashboard.inventory.thresholdReorder', { threshold: item.threshold, reorder: item.reorder_point }) }}</p>
+                <p class="whitespace-pre-line text-right text-xs text-slate-500 dark:text-slate-400">{{ t('dashboard.inventory.thresholdReorder', { threshold: item.threshold, reorder: item.reorder_point }) }}</p>
               </div>
               <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                 <div class="h-full rounded-full transition-all duration-700" :class="stockClass(item.stock_status)" :style="{ width: `${stockProgress(item)}%` }" />

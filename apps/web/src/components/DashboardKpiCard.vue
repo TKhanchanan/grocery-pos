@@ -24,16 +24,29 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <article class="dashboard-kpi group relative overflow-hidden rounded-2xl bg-white/80 p-5 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-950/10 dark:bg-slate-900/80 dark:hover:shadow-black/30">
+  <article
+    class="dashboard-kpi group relative min-w-0 overflow-hidden rounded-2xl bg-white/80 p-5 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-950/10 dark:bg-slate-900/80 dark:hover:shadow-black/30"
+  >
     <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-emerald-400 to-sky-400 opacity-80" />
-    <div class="flex items-start justify-between gap-3">
-      <div class="min-w-0">
-        <p class="text-sm font-bold text-slate-500 dark:text-slate-400">{{ label }}</p>
-        <p class="mt-3 break-words text-3xl font-black text-slate-950 dark:text-slate-50">
-          <span v-if="textValue">{{ textValue }}</span>
+
+    <div class="flex min-w-0 items-start justify-between gap-3">
+      <div class="min-w-0 flex-1 overflow-hidden">
+        <p
+          class="truncate text-sm font-bold text-slate-500 dark:text-slate-400"
+          :title="label"
+        >
+          {{ label }}
+        </p>
+
+        <p class="mt-2 min-w-0 text-3xl font-black leading-[1.35] text-slate-950 dark:text-slate-50">
+          <span v-if="textValue" class="block max-w-full truncate pb-1 leading-[1.35]" :title="textValue">
+            {{ textValue }}
+          </span>
+
           <AnimatedNumber v-else :value="value" :decimals="decimals" :locale="locale" :suffix="suffix" />
         </p>
       </div>
+
       <div
         class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl shadow-sm transition group-hover:scale-105"
         :class="{
@@ -47,9 +60,22 @@ withDefaults(defineProps<{
         <AppIcon :name="icon" />
       </div>
     </div>
-    <div class="mt-4 flex flex-wrap items-center gap-2">
-      <span v-if="trend" class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200">{{ trend }}</span>
-      <span v-if="helper" class="text-xs font-semibold text-slate-500 dark:text-slate-400">{{ helper }}</span>
+
+    <div class="mt-4 flex min-w-0 flex-wrap items-center gap-2 overflow-hidden">
+      <span
+        v-if="trend"
+        class="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200"
+      >
+        {{ trend }}
+      </span>
+
+      <span
+        v-if="helper"
+        class="min-w-0 truncate text-xs font-semibold text-slate-500 dark:text-slate-400"
+        :title="helper"
+      >
+        {{ helper }}
+      </span>
     </div>
   </article>
 </template>
