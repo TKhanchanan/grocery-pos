@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { apiClient } from '../api/client'
 import { applyDocumentPreferences, readStoredLanguage, readStoredTheme, translateMessage, type AppLanguage, type AppTheme, type TranslationKey } from '../i18n'
-import type { InventoryAlert } from '../types/navigation'
 
 type TextSize = 'sm' | 'base' | 'lg' | 'xl'
 type ToastType = 'success' | 'error' | 'warning' | 'info'
@@ -50,8 +49,8 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function loadAlertCount() {
-    const alerts = await apiClient<InventoryAlert[]>('/v1/alerts?unread=true').catch(() => [])
-    alertCount.value = alerts.length
+    const result = await apiClient<{ count: number }>('/v1/alerts/unread-count').catch(() => ({ count: 0 }))
+    alertCount.value = result.count
   }
 
   function setLanguage(value: AppLanguage) {

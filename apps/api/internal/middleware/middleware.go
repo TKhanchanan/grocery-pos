@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"compress/gzip"
 	"log"
 	"net/http"
 	"runtime/debug"
@@ -22,9 +23,97 @@ func Chain(handler http.Handler, middlewares ...Middleware) http.Handler {
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start).Round(time.Millisecond))
+		recorder := &statusRecorder{ResponseWriter: w}
+		next.ServeHTTP(recorder, r)
+		log.Printf("method=%s path=%s status=%d duration=%s", r.Method, r.URL.Path, recorder.statusCode(), time.Since(start).Round(time.Millisecond))
 	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusRecorder) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusRecorder) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func (w *statusRecorder) statusCode() int {
+	if w.status == 0 {
+		return http.StatusOK
+	}
+	return w.status
+}
+
+func (w *statusRecorder) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+func GzipJSON(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead || !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		writer := &gzipResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(writer, r)
+		_ = writer.Close()
+	})
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	gzipWriter  *gzip.Writer
+	wroteHeader bool
+	compress    bool
+}
+
+func (w *gzipResponseWriter) WriteHeader(status int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	contentType := w.Header().Get("Content-Type")
+	w.compress = status != http.StatusNoContent && status != http.StatusNotModified && strings.HasPrefix(contentType, "application/json")
+	if w.compress {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Add("Vary", "Accept-Encoding")
+		w.Header().Del("Content-Length")
+		w.gzipWriter = gzip.NewWriter(w.ResponseWriter)
+	}
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *gzipResponseWriter) Write(body []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	if w.compress {
+		return w.gzipWriter.Write(body)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func (w *gzipResponseWriter) Close() error {
+	if w.gzipWriter == nil {
+		return nil
+	}
+	return w.gzipWriter.Close()
+}
+
+func (w *gzipResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func Recover(next http.Handler) http.Handler {

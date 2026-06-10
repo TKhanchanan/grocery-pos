@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ApexOptions } from 'apexcharts'
-import VueApexCharts from 'vue3-apexcharts'
 import { RouterLink } from 'vue-router'
 import { apiClient } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
@@ -21,6 +20,7 @@ import { appLocale, formatAppDateTime } from '../utils/date'
 
 type Period = '7D' | '30D' | 'MONTH'
 
+const VueApexCharts = defineAsyncComponent(() => import('vue3-apexcharts'))
 const app = useAppStore()
 const auth = useAuthStore()
 const summary = ref<DashboardSummary | null>(null)
@@ -249,6 +249,7 @@ async function loadDashboard() {
   error.value = ''
   try {
     summary.value = await apiClient<DashboardSummary>('/v1/dashboard/summary')
+    app.alertCount = summary.value.unread_alert_count
   } catch (err) {
     error.value = err instanceof Error ? err.message : app.t('dashboard.error.load')
   } finally {

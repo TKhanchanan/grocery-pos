@@ -229,7 +229,7 @@ function closeTopbarDropdowns(event: MouseEvent) {
 }
 
 onMounted(() => {
-  app.loadAlertCount()
+  if (route.path !== '/dashboard') app.loadAlertCount()
   document.addEventListener('mousedown', closeTopbarDropdowns)
   window.addEventListener('resize', updateNotificationPosition)
 })
@@ -240,7 +240,7 @@ onBeforeUnmount(() => {
 })
 
 watch(() => route.path, () => {
-  app.loadAlertCount()
+  if (route.path !== '/dashboard') app.loadAlertCount()
   notificationsOpen.value = false
   languageOpen.value = false
   textSizeOpen.value = false

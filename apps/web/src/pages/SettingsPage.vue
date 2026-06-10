@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { apiClient, patchJSON, postJSON } from '../api/client'
 import AppButton from '../components/AppButton.vue'
@@ -15,15 +16,17 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
+import { useReferenceDataStore } from '../stores/referenceData'
 import type { AppSettings, LineSettings, Location, NotificationLog, NotificationLogPage } from '../types/navigation'
 import { formatAppDateTime } from '../utils/date'
 
 type SettingsTab = 'shop' | 'receipt' | 'line' | 'accessibility' | 'system'
 
 const app = useAppStore()
+const referenceData = useReferenceDataStore()
+const { locations } = storeToRefs(referenceData)
 const route = useRoute()
 const router = useRouter()
-const locations = ref<Location[]>([])
 const logs = ref<NotificationLog[]>([])
 const logsLoading = ref(false)
 const logsPage = ref(1)
@@ -130,7 +133,7 @@ async function load() {
     const [settings, lineSettings, locationRows] = await Promise.all([
       apiClient<AppSettings>('/v1/settings'),
       apiClient<LineSettings>('/v1/settings/line'),
-      apiClient<Location[]>('/v1/locations'),
+      referenceData.loadLocations(),
       loadNotificationLogs(),
     ])
     applySettings(settings)

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { RouterLink } from 'vue-router'
 import { apiClient, postJSON } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
@@ -18,18 +19,18 @@ import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
 import { useCartStore } from '../stores/cart'
+import { useReferenceDataStore } from '../stores/referenceData'
 import type { Category, Location, POSProduct, POSProductPage, Receipt, StockStatus } from '../types/navigation'
 import { formatAppDateTime } from '../utils/date'
 import { prepareReceiptPrintArea, resetReceiptPrintArea } from '../utils/print'
-import { defaultReceiptSettings, loadReceiptSettings } from '../utils/receiptSettings'
+import { defaultReceiptSettings } from '../utils/receiptSettings'
 
 const app = useAppStore()
 const auth = useAuthStore()
 const cart = useCartStore()
-const locations = ref<Location[]>([])
-const categories = ref<Category[]>([])
+const referenceData = useReferenceDataStore()
+const { locations, posCategories: categories, receiptSettings } = storeToRefs(referenceData)
 const products = ref<POSProduct[]>([])
-const receiptSettings = ref({ ...defaultReceiptSettings })
 const selectedLocationID = ref('')
 const selectedCategoryID = ref('')
 const search = ref('')
@@ -109,15 +110,15 @@ function paymentLabel(method: string) {
 }
 
 async function loadLocations() {
-  locations.value = await apiClient<Location[]>('/v1/locations')
+  await referenceData.loadLocations()
 }
 
 async function loadCategories() {
-  categories.value = await apiClient<Category[]>('/v1/pos/categories').catch(() => [])
+  await referenceData.loadPOSCategories().catch(() => [])
 }
 
 async function loadReceiptProfile() {
-  receiptSettings.value = await loadReceiptSettings().catch(() => ({ ...defaultReceiptSettings }))
+  await referenceData.loadReceiptSettings().catch(() => ({ ...defaultReceiptSettings }))
 }
 
 function selectInitialLocation() {

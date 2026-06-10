@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"compress/gzip"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -68,5 +71,51 @@ func TestCORSDoesNotAllowUnmatchedOrWildcardOrigin(t *testing.T) {
 				t.Fatalf("Access-Control-Allow-Credentials = %q, want empty", got)
 			}
 		})
+	}
+}
+
+func TestGzipJSONCompressesJSONResponses(t *testing.T) {
+	handler := GzipJSON(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip", got)
+	}
+	reader, err := gzip.NewReader(rec.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]bool
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if !payload["success"] {
+		t.Fatalf("payload = %s", body)
+	}
+}
+
+func TestStatusRecorderCapturesImplicitStatus(t *testing.T) {
+	rec := httptest.NewRecorder()
+	writer := &statusRecorder{ResponseWriter: rec}
+
+	_, _ = writer.Write([]byte("ok"))
+
+	if writer.statusCode() != http.StatusOK {
+		t.Fatalf("status = %d, want %d", writer.statusCode(), http.StatusOK)
 	}
 }

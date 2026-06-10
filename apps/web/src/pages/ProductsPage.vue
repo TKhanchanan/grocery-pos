@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { API_BASE_URL, apiClient, deleteJSON, patchJSON, postJSON } from '../api/client'
 import { downloadFile } from '../api/download'
 import { authHeaders, handleAuthFailure } from '../api/session'
@@ -19,6 +20,7 @@ import StatCard from '../components/StatCard.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
+import { useReferenceDataStore } from '../stores/referenceData'
 import type { Category, ImportJob, ImportJobRow, Product, ProductStock, StockStatus } from '../types/navigation'
 
 interface ProductForm {
@@ -45,8 +47,9 @@ const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
 
 const app = useAppStore()
 const auth = useAuthStore()
+const referenceData = useReferenceDataStore()
+const { categories } = storeToRefs(referenceData)
 const products = ref<Product[]>([])
-const categories = ref<Category[]>([])
 const selectedStocks = ref<ProductStock[]>([])
 const selectedProduct = ref<Product | null>(null)
 const loading = ref(false)
@@ -187,7 +190,7 @@ async function load() {
     const qs = queryString()
     const [productRows, categoryRows] = await Promise.all([
       apiClient<Product[]>(`/v1/products${qs ? `?${qs}` : ''}`),
-      apiClient<Category[]>('/v1/categories'),
+      referenceData.loadCategories(),
     ])
     products.value = productRows
     categories.value = categoryRows

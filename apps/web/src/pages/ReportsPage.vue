@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { apiClient } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
@@ -17,6 +18,7 @@ import StatCard from '../components/StatCard.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
+import { useReferenceDataStore } from '../stores/referenceData'
 import type { IconName } from '../types/icons'
 import type { Location, PaymentSummaryReport, ProductSalesReport, SalesPeriodReport, StockReport, StockStatus } from '../types/navigation'
 import { formatAppDate, formatAppNumericDate } from '../utils/date'
@@ -44,6 +46,8 @@ interface KpiCard {
 
 const app = useAppStore()
 const auth = useAuthStore()
+const referenceData = useReferenceDataStore()
+const { locations } = storeToRefs(referenceData)
 const route = useRoute()
 const router = useRouter()
 
@@ -62,7 +66,6 @@ const tabs: ReportTab[] = [
 const reportTabKeys = tabs.map((tab) => tab.key)
 const activeTab = ref<ReportKey>('daily-sales')
 const rows = ref<ReportRow[]>([])
-const locations = ref<Location[]>([])
 const loading = ref(false)
 const exportLoading = ref(false)
 const error = ref('')
@@ -439,7 +442,7 @@ async function exportExcel() {
 
 async function loadLocations() {
   if (!canViewLocations.value) return
-  locations.value = await apiClient<Location[]>('/v1/locations')
+  await referenceData.loadLocations()
 }
 
 function setTab(key: ReportKey) {

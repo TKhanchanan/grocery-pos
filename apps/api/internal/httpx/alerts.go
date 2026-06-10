@@ -47,6 +47,15 @@ func (s *Server) alerts(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, alerts)
 }
 
+func (s *Server) unreadAlertCount(w http.ResponseWriter, r *http.Request) {
+	var count int
+	if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM alerts WHERE read_at IS NULL AND resolved_at IS NULL`).Scan(&count); err != nil {
+		response.ErrorJSON(w, http.StatusInternalServerError, "QUERY_FAILED", "Could not count unread alerts.")
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]int{"count": count})
+}
+
 func (s *Server) readAlert(w http.ResponseWriter, r *http.Request) {
 	id, err := parsePathID(r, "id")
 	if err != nil {
@@ -99,6 +108,10 @@ func (s *Server) listAlerts(ctx context.Context, r *http.Request) ([]Alert, erro
 		where = append(where, "a.location_id=?")
 		args = append(args, id)
 	}
+	limit := positiveQueryInt(r, "limit", 300)
+	if limit > 300 {
+		limit = 300
+	}
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT a.id, a.product_id, p.name, p.sku, a.location_id, l.name, a.type, a.message,
@@ -108,7 +121,7 @@ func (s *Server) listAlerts(ctx context.Context, r *http.Request) ([]Alert, erro
 		JOIN locations l ON l.id=a.location_id
 		WHERE `+strings.Join(where, " AND ")+`
 		ORDER BY a.read_at IS NOT NULL, a.created_at DESC
-		LIMIT 300`, args...)
+		LIMIT ?`, append(args, limit)...)
 	if err != nil {
 		return nil, err
 	}

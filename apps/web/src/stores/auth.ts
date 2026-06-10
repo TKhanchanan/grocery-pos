@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiClient, postJSON } from '../api/client'
+import { apiClient, invalidateApiCache, postJSON } from '../api/client'
 import { clearAuthSession, handleAuthFailure, readAuthToken } from '../api/session'
 import type { AssignedRole, AuthMeResponse, PermissionCode, Role, User } from '../types/navigation'
 
@@ -34,6 +34,7 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   async function login(username: string, password: string) {
+    invalidateApiCache()
     const result = await postJSON<LoginResponse>('/v1/auth/login', { username, password })
     token.value = result.token
     user.value = result.user
@@ -50,6 +51,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     roles.value = []
     permissions.value = []
+    invalidateApiCache()
     clearAuthSession()
   }
 

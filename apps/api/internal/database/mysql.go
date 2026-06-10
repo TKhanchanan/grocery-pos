@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -17,10 +18,17 @@ func Open(dsn string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(20)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxIdleTime(5 * time.Minute)
-	db.SetConnMaxLifetime(30 * time.Minute)
+	const (
+		maxOpenConns    = 20
+		maxIdleConns    = 10
+		connMaxIdleTime = 5 * time.Minute
+		connMaxLifetime = 30 * time.Minute
+	)
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxIdleConns)
+	db.SetConnMaxIdleTime(connMaxIdleTime)
+	db.SetConnMaxLifetime(connMaxLifetime)
+	log.Printf("database pool max_open=%d max_idle=%d max_idle_time=%s max_lifetime=%s", maxOpenConns, maxIdleConns, connMaxIdleTime, connMaxLifetime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

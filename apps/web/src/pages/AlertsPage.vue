@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { RouterLink } from 'vue-router'
 import { apiClient, patchJSON } from '../api/client'
 import AppBadge from '../components/AppBadge.vue'
@@ -14,6 +15,7 @@ import StatCard from '../components/StatCard.vue'
 import type { TranslationKey } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { useAuthStore } from '../stores/auth'
+import { useReferenceDataStore } from '../stores/referenceData'
 import type { AlertType, InventoryAlert, Location } from '../types/navigation'
 import { formatAppDateTime } from '../utils/date'
 
@@ -21,8 +23,9 @@ type AlertFilter = 'all' | 'unread' | AlertType
 
 const app = useAppStore()
 const auth = useAuthStore()
+const referenceData = useReferenceDataStore()
+const { locations } = storeToRefs(referenceData)
 const alerts = ref<InventoryAlert[]>([])
-const locations = ref<Location[]>([])
 const loading = ref(false)
 const error = ref('')
 
@@ -134,7 +137,7 @@ async function loadAlerts() {
 }
 
 async function loadLocations() {
-  locations.value = await apiClient<Location[]>('/v1/locations').catch(() => [])
+  await referenceData.loadLocations().catch(() => [])
 }
 
 async function markRead(alert: InventoryAlert) {

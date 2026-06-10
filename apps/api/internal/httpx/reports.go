@@ -19,6 +19,7 @@ type DashboardSummary struct {
 	LowStockCount        int                    `json:"low_stock_count"`
 	OutOfStockCount      int                    `json:"out_of_stock_count"`
 	ReorderCount         int                    `json:"reorder_count"`
+	UnreadAlertCount     int                    `json:"unread_alert_count"`
 	PaymentSummary       []PaymentSummaryReport `json:"payment_method_summary"`
 	RecentSales          []Receipt              `json:"recent_sales"`
 	SalesTrend           []SalesPeriodReport    `json:"sales_trend"`
@@ -161,50 +162,72 @@ func (s *Server) reportReorder(w http.ResponseWriter, r *http.Request) {
 func (s *Server) buildDashboardSummary(ctx context.Context) (DashboardSummary, error) {
 	var summary DashboardSummary
 	if err := s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(total_amount), 0), COUNT(*)
-		FROM sales
-		WHERE status='COMPLETED' AND DATE(created_at)=CURDATE()`).Scan(&summary.TodaySales, &summary.TodayReceipts); err != nil {
-		return DashboardSummary{}, err
-	}
-	if err := s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(profit), 0)
-		FROM sales
-		WHERE status='COMPLETED' AND created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`).Scan(&summary.GrossProfitThisMonth); err != nil {
-		return DashboardSummary{}, err
-	}
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM alerts WHERE resolved_at IS NULL AND type='LOW_STOCK'`).Scan(&summary.LowStockCount); err != nil {
-		return DashboardSummary{}, err
-	}
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM alerts WHERE resolved_at IS NULL AND type='OUT_OF_STOCK'`).Scan(&summary.OutOfStockCount); err != nil {
-		return DashboardSummary{}, err
-	}
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM alerts WHERE resolved_at IS NULL AND type='REORDER_POINT'`).Scan(&summary.ReorderCount); err != nil {
+		SELECT
+			COALESCE((SELECT SUM(total_amount) FROM sales WHERE status='COMPLETED' AND created_at >= CURDATE() AND created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY)), 0),
+			(SELECT COUNT(*) FROM sales WHERE status='COMPLETED' AND created_at >= CURDATE() AND created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY)),
+			COALESCE((SELECT SUM(profit) FROM sales WHERE status='COMPLETED' AND created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')), 0),
+			(SELECT COUNT(*) FROM alerts WHERE resolved_at IS NULL AND type='LOW_STOCK'),
+			(SELECT COUNT(*) FROM alerts WHERE resolved_at IS NULL AND type='OUT_OF_STOCK'),
+			(SELECT COUNT(*) FROM alerts WHERE resolved_at IS NULL AND type='REORDER_POINT'),
+			(SELECT COUNT(*) FROM alerts WHERE resolved_at IS NULL AND read_at IS NULL)`).Scan(
+		&summary.TodaySales,
+		&summary.TodayReceipts,
+		&summary.GrossProfitThisMonth,
+		&summary.LowStockCount,
+		&summary.OutOfStockCount,
+		&summary.ReorderCount,
+		&summary.UnreadAlertCount,
+	); err != nil {
 		return DashboardSummary{}, err
 	}
 
-	topProducts, err := s.productSalesReportForWhere(ctx, []string{"s.status='COMPLETED'", "s.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')"}, nil, "SUM(si.quantity) DESC", 5)
-	if err != nil {
-		return DashboardSummary{}, err
+	tasks := []func() error{
+		func() error {
+			topProducts, err := s.productSalesReportForWhere(ctx, []string{"s.status='COMPLETED'", "s.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')"}, nil, "SUM(si.quantity) DESC", 5)
+			if err != nil {
+				return err
+			}
+			summary.TopProducts = topProducts
+			if len(topProducts) > 0 {
+				summary.TopProductThisMonth = &topProducts[0]
+			}
+			return nil
+		},
+		func() error {
+			var err error
+			summary.PaymentSummary, err = s.paymentSummaryForWhere(ctx, []string{"s.status='COMPLETED'", "s.created_at >= CURDATE()", "s.created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY)"}, nil)
+			return err
+		},
+		func() error {
+			var err error
+			summary.RecentSales, err = s.recentCompletedSales(ctx, 5)
+			return err
+		},
+		func() error {
+			var err error
+			summary.SalesTrend, err = s.salesTrend(ctx, 31)
+			return err
+		},
+		func() error {
+			var err error
+			summary.LowStockItems, err = s.stockReportForWhere(ctx, []string{"p.threshold > 0", "ps.quantity <= p.threshold"}, nil, 6)
+			return err
+		},
 	}
-	summary.TopProducts = topProducts
-	if len(topProducts) > 0 {
-		summary.TopProductThisMonth = &topProducts[0]
+	errors := make(chan error, len(tasks))
+	for _, task := range tasks {
+		go func(run func() error) {
+			errors <- run()
+		}(task)
 	}
-	summary.PaymentSummary, err = s.paymentSummaryForWhere(ctx, []string{"s.status='COMPLETED'", "DATE(s.created_at)=CURDATE()"}, nil)
-	if err != nil {
-		return DashboardSummary{}, err
+	var firstErr error
+	for range tasks {
+		if err := <-errors; err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
-	summary.RecentSales, err = s.recentCompletedSales(ctx, 5)
-	if err != nil {
-		return DashboardSummary{}, err
-	}
-	summary.SalesTrend, err = s.salesTrend(ctx, 31)
-	if err != nil {
-		return DashboardSummary{}, err
-	}
-	summary.LowStockItems, err = s.stockReportForWhere(ctx, []string{"p.threshold > 0", "ps.quantity <= p.threshold"}, nil, 6)
-	if err != nil {
-		return DashboardSummary{}, err
+	if firstErr != nil {
+		return DashboardSummary{}, firstErr
 	}
 	return summary, nil
 }

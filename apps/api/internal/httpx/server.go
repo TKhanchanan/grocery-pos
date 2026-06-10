@@ -92,6 +92,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/sales/{id}/receipt", s.requirePermission(s.saleReceipt, "sales.receipt.view"))
 	mux.HandleFunc("POST /api/v1/sales/{id}/cancel", s.requirePermission(s.cancelSale, "sales.cancel"))
 	mux.HandleFunc("GET /api/v1/alerts", s.requirePermission(s.alerts, "alerts.view"))
+	mux.HandleFunc("GET /api/v1/alerts/unread-count", s.requirePermission(s.unreadAlertCount, "alerts.view"))
 	mux.HandleFunc("PATCH /api/v1/alerts/{id}/read", s.requirePermission(s.readAlert, "alerts.mark_read"))
 	mux.HandleFunc("PATCH /api/v1/alerts/read-all", s.requirePermission(s.readAllAlerts, "alerts.mark_read"))
 	mux.HandleFunc("GET /api/v1/dashboard/summary", s.requirePermission(s.dashboardSummary, "dashboard.view"))
@@ -139,8 +140,9 @@ func (s *Server) Routes() http.Handler {
 	return middleware.Chain(
 		mux,
 		middleware.CORS(s.cfg.CORSOrigins),
-		middleware.Recover,
 		middleware.RequestLogger,
+		middleware.Recover,
+		middleware.GzipJSON,
 	)
 }
 

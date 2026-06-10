@@ -293,6 +293,7 @@ export interface DashboardSummary {
   low_stock_count: number
   out_of_stock_count: number
   reorder_count: number
+  unread_alert_count: number
   payment_method_summary: PaymentSummaryReport[]
   recent_sales: Receipt[]
   sales_trend: SalesPeriodReport[]
